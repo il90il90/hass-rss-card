@@ -1,6 +1,6 @@
 {
   "name": "hass-rss-card",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Home Assistant RSS integration and Lovelace card",
   "type": "module",
   "main": "dist/hass-rss-card.js",

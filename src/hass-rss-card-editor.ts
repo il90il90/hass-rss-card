@@ -22,6 +22,12 @@ export class HassRssCardEditor extends LitElement {
       font-weight: 500;
       margin-bottom: 8px;
     }
+    .section-help {
+      margin: 0 0 12px;
+      font-size: 0.85em;
+      opacity: 0.8;
+      line-height: 1.4;
+    }
     .feed-row {
       display: flex;
       gap: 8px;
@@ -57,17 +63,23 @@ export class HassRssCardEditor extends LitElement {
 
   private _renderSources(): TemplateResult {
     const feeds = this._config.feeds ?? [{ entity: '' }];
+    const rssEntities = this._getRssEntities();
 
     return html`
       <div class="section">
         <div class="section-title">Sources</div>
+        <p class="section-help">
+          Choose RSS sensor entities created by the HASS RSS integration.
+          To add a new RSS URL, go to Settings → Devices &amp; Services → HASS RSS.
+        </p>
         ${feeds.map(
           (feed, index) => html`
             <div class="feed-row">
               <ha-entity-picker
                 .hass=${this.hass}
+                .label=${'RSS sensor'}
                 .value=${feed.entity}
-                .includeDomains=${['sensor']}
+                .includeEntities=${rssEntities}
                 .allowCustomEntity=${false}
                 @value-changed=${(ev: CustomEvent) =>
                   this._updateFeed(index, 'entity', ev.detail.value)}
@@ -93,7 +105,7 @@ export class HassRssCardEditor extends LitElement {
             </div>
           `,
         )}
-        <ha-button class="add-btn" @click=${this._addFeed}>Add feed</ha-button>
+        <ha-button class="add-btn" @click=${this._addFeed}>Add RSS sensor</ha-button>
       </div>
     `;
   }
@@ -378,6 +390,16 @@ export class HassRssCardEditor extends LitElement {
     `;
   }
 
+  private _getRssEntities(): string[] {
+    return Object.keys(this.hass.states).filter((entityId) => {
+      const state = this.hass.states[entityId];
+      return (
+        entityId.startsWith('sensor.') &&
+        state.attributes?.feed_name !== undefined
+      );
+    });
+  }
+
   private _addFeed(): void {
     const feeds = [...(this._config.feeds ?? []), { entity: '' }];
     this._updateConfig('feeds', feeds);
@@ -424,7 +446,10 @@ export class HassRssCardEditor extends LitElement {
 }
 
 interface HomeAssistantEditor {
-  states: Record<string, { entity_id: string }>;
+  states: Record<
+    string,
+    { entity_id: string; attributes?: Record<string, unknown> }
+  >;
 }
 
 declare global {

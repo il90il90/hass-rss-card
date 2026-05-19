@@ -174,15 +174,21 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     }
     _renderSources() {
         const feeds = this._config.feeds ?? [{ entity: '' }];
+        const rssEntities = this._getRssEntities();
         return b `
       <div class="section">
         <div class="section-title">Sources</div>
+        <p class="section-help">
+          Choose RSS sensor entities created by the HASS RSS integration.
+          To add a new RSS URL, go to Settings → Devices &amp; Services → HASS RSS.
+        </p>
         ${feeds.map((feed, index) => b `
             <div class="feed-row">
               <ha-entity-picker
                 .hass=${this.hass}
+                .label=${'RSS sensor'}
                 .value=${feed.entity}
-                .includeDomains=${['sensor']}
+                .includeEntities=${rssEntities}
                 .allowCustomEntity=${false}
                 @value-changed=${(ev) => this._updateFeed(index, 'entity', ev.detail.value)}
               ></ha-entity-picker>
@@ -201,7 +207,7 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
             : ''}
             </div>
           `)}
-        <ha-button class="add-btn" @click=${this._addFeed}>Add feed</ha-button>
+        <ha-button class="add-btn" @click=${this._addFeed}>Add RSS sensor</ha-button>
       </div>
     `;
     }
@@ -471,6 +477,13 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
       </div>
     `;
     }
+    _getRssEntities() {
+        return Object.keys(this.hass.states).filter((entityId) => {
+            const state = this.hass.states[entityId];
+            return (entityId.startsWith('sensor.') &&
+                state.attributes?.feed_name !== undefined);
+        });
+    }
     _addFeed() {
         const feeds = [...(this._config.feeds ?? []), { entity: '' }];
         this._updateConfig('feeds', feeds);
@@ -513,6 +526,12 @@ HassRssCardEditor.styles = i$4 `
       font-size: 1.1em;
       font-weight: 500;
       margin-bottom: 8px;
+    }
+    .section-help {
+      margin: 0 0 12px;
+      font-size: 0.85em;
+      opacity: 0.8;
+      line-height: 1.4;
     }
     .feed-row {
       display: flex;
