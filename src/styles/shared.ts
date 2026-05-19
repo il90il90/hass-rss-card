@@ -65,6 +65,12 @@ export const cardStyles = css`
     border-color: var(--primary-color);
   }
 
+  .last-updated {
+    font-size: 0.75em;
+    opacity: 0.6;
+    margin-bottom: 8px;
+  }
+
   .refresh-btn {
     cursor: pointer;
     opacity: 0.7;

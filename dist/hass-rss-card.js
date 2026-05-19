@@ -135,6 +135,7 @@ const DEFAULT_CONFIG = {
         new_badge_duration: 3600,
         show_refresh_button: true,
         show_source_selector: true,
+        show_last_updated: true,
         track_read_unread: true,
     },
     always_show_latest: true,
@@ -497,6 +498,7 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
           .data=${features}
           .schema=${[
             { name: 'show_relative_time', selector: { boolean: {} } },
+            { name: 'show_last_updated', selector: { boolean: {} } },
             { name: 'show_new_badge', selector: { boolean: {} } },
             {
                 name: 'new_badge_duration',
@@ -848,6 +850,12 @@ const cardStyles = i$4 `
   .source-select:focus {
     outline: none;
     border-color: var(--primary-color);
+  }
+
+  .last-updated {
+    font-size: 0.75em;
+    opacity: 0.6;
+    margin-bottom: 8px;
   }
 
   .refresh-btn {
@@ -1326,6 +1334,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         dir=${dir}
       >
         ${this._renderHeader(features)}
+        ${this._renderLastUpdated(features)}
         ${items.length === 0
             ? this._renderEmpty()
             : this._renderPreset(preset, items, dir, features)}
@@ -1382,6 +1391,34 @@ let HassRssCard = class HassRssCard extends i$1 {
             : A}
       </div>
     `;
+    }
+    _renderLastUpdated(features) {
+        if (features.show_last_updated === false) {
+            return A;
+        }
+        const lastSuccess = this._getActiveLastSuccess();
+        if (!lastSuccess) {
+            return A;
+        }
+        const relative = formatRelativeTime(lastSuccess, this.hass.locale?.language);
+        if (!relative) {
+            return A;
+        }
+        return b `<div class="last-updated">Updated ${relative}</div>`;
+    }
+    _getActiveLastSuccess() {
+        let latest;
+        for (const feed of this._getActiveFeeds()) {
+            const lastSuccess = this.hass.states[feed.entity]?.attributes
+                ?.last_success;
+            if (!lastSuccess) {
+                continue;
+            }
+            if (!latest || Date.parse(lastSuccess) > Date.parse(latest)) {
+                latest = lastSuccess;
+            }
+        }
+        return latest;
     }
     _renderEmpty() {
         const sources = this._getSourceOptions();

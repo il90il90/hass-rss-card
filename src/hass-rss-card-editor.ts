@@ -388,6 +388,7 @@ export class HassRssCardEditor extends LitElement {
           .data=${features}
           .schema=${[
             { name: 'show_relative_time', selector: { boolean: {} } },
+            { name: 'show_last_updated', selector: { boolean: {} } },
             { name: 'show_new_badge', selector: { boolean: {} } },
             {
               name: 'new_badge_duration',

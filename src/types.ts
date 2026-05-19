@@ -52,6 +52,7 @@ export interface FeaturesConfig {
   new_badge_duration?: number;
   show_refresh_button?: boolean;
   show_source_selector?: boolean;
+  show_last_updated?: boolean;
   track_read_unread?: boolean;
 }
 

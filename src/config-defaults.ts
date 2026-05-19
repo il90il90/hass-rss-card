@@ -51,6 +51,7 @@ export const DEFAULT_CONFIG: HassRssCardConfig = {
     new_badge_duration: 3600,
     show_refresh_button: true,
     show_source_selector: true,
+    show_last_updated: true,
     track_read_unread: true,
   },
   always_show_latest: true,

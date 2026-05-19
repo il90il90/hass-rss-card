@@ -116,6 +116,7 @@ export class HassRssCard extends LitElement {
         dir=${dir}
       >
         ${this._renderHeader(features)}
+        ${this._renderLastUpdated(features)}
         ${items.length === 0
           ? this._renderEmpty()
           : this._renderPreset(preset, items, dir, features)}
@@ -179,6 +180,46 @@ export class HassRssCard extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  private _renderLastUpdated(
+    features: FeaturesConfig,
+  ): TemplateResult | typeof nothing {
+    if (features.show_last_updated === false) {
+      return nothing;
+    }
+
+    const lastSuccess = this._getActiveLastSuccess();
+    if (!lastSuccess) {
+      return nothing;
+    }
+
+    const relative = formatRelativeTime(
+      lastSuccess,
+      this.hass.locale?.language,
+    );
+    if (!relative) {
+      return nothing;
+    }
+
+    return html`<div class="last-updated">Updated ${relative}</div>`;
+  }
+
+  private _getActiveLastSuccess(): string | undefined {
+    let latest: string | undefined;
+
+    for (const feed of this._getActiveFeeds()) {
+      const lastSuccess = this.hass.states[feed.entity]?.attributes
+        ?.last_success as string | undefined;
+      if (!lastSuccess) {
+        continue;
+      }
+      if (!latest || Date.parse(lastSuccess) > Date.parse(latest)) {
+        latest = lastSuccess;
+      }
+    }
+
+    return latest;
   }
 
   private _renderEmpty(): TemplateResult {
