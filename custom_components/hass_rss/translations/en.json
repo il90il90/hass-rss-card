@@ -6,6 +6,10 @@
         "description": "Choose how to add RSS feeds.",
         "data": {
           "action": "Action"
+        },
+        "menu_options": {
+          "add_feed": "Add RSS feed",
+          "import_opml": "Import OPML"
         }
       },
       "add_feed": {

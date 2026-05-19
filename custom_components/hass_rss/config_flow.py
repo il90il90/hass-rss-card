@@ -11,7 +11,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, selector
 
 from .const import (
     CONF_CATEGORY,
@@ -80,12 +80,31 @@ class HassRssConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        if user_input is None:
-            return self.async_show_menu(
-                step_id="user",
-                menu_options=["add_feed", "import_opml"],
-            )
-        return await getattr(self, f"async_step_{user_input}")()
+        if user_input is not None:
+            return await getattr(self, f"async_step_{user_input['action']}")()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {
+                                    "value": "add_feed",
+                                    "label": "Add RSS feed",
+                                },
+                                {
+                                    "value": "import_opml",
+                                    "label": "Import OPML",
+                                },
+                            ],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+        )
 
     async def async_step_add_feed(
         self, user_input: dict[str, Any] | None = None
