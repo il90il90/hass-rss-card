@@ -995,6 +995,15 @@ const tickerStyles = i$4 `
   }
 `;
 
+function parseItemTimestamp(item) {
+    if (!item.published)
+        return 0;
+    const timestamp = Date.parse(item.published);
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+function sortItemsNewestFirst(items) {
+    return [...items].sort((a, b) => parseItemTimestamp(b) - parseItemTimestamp(a));
+}
 function mergeFeedItems(hass, feeds, maxItems) {
     const allItems = [];
     for (const feed of feeds) {
@@ -1008,16 +1017,26 @@ function mergeFeedItems(hass, feeds, maxItems) {
         }
         const items = attrs.items ?? [];
         const feedName = attrs.feed_name ?? feed.entity;
+        const latestHeadline = state.state && state.state !== 'unavailable'
+            ? state.state
+            : '';
         for (const item of items) {
-            allItems.push({
+            const normalized = {
                 ...item,
                 feed_name: item.feed_name ?? feedName,
                 category: item.category ?? entityCategory,
-            });
+            };
+            if (latestHeadline &&
+                normalized.title === latestHeadline &&
+                parseItemTimestamp(normalized) === 0) {
+                normalized.published =
+                    normalized.published ?? attrs.published;
+            }
+            allItems.push(normalized);
         }
-        if (items.length === 0 && state.state && state.state !== 'unavailable') {
+        if (items.length === 0 && latestHeadline) {
             allItems.push({
-                title: state.state,
+                title: latestHeadline,
                 link: attrs.link ?? '',
                 published: attrs.published,
                 summary: attrs.summary,
@@ -1028,14 +1047,10 @@ function mergeFeedItems(hass, feeds, maxItems) {
             });
         }
     }
-    allItems.sort((a, b) => {
-        const dateA = a.published ? Date.parse(a.published) : 0;
-        const dateB = b.published ? Date.parse(b.published) : 0;
-        return dateB - dateA;
-    });
+    const sorted = sortItemsNewestFirst(allItems);
     const seen = new Set();
     const deduped = [];
-    for (const item of allItems) {
+    for (const item of sorted) {
         const key = item.link || item.guid || item.title;
         if (seen.has(key))
             continue;
@@ -1046,6 +1061,9 @@ function mergeFeedItems(hass, feeds, maxItems) {
 }
 function getFeedEntityIds(feeds) {
     return feeds.map((f) => f.entity);
+}
+function getNewestItem(items) {
+    return sortItemsNewestFirst(items)[0];
 }
 
 const READ_KEY = 'hass_rss_read';
@@ -1164,8 +1182,9 @@ let HassRssCard = class HassRssCard extends i$1 {
     updated(changed) {
         if (changed.has('hass') || changed.has('_config')) {
             const items = this._getItems();
-            if (this._config?.always_show_latest && items.length > 0) {
-                const latestKey = items[0].link || items[0].title || '';
+            const newest = getNewestItem(items);
+            if (newest) {
+                const latestKey = newest.link || newest.title || '';
                 if (latestKey && latestKey !== this._lastLatestKey) {
                     this._carouselIndex = 0;
                     this._lastLatestKey = latestKey;
@@ -1496,6 +1515,12 @@ let HassRssCard = class HassRssCard extends i$1 {
         try {
             await this.hass.callService('hass_rss', 'refresh_all');
             await this._waitForStateChange(entities, statesBefore, 15000);
+            const items = this._getItems();
+            const newest = getNewestItem(items);
+            if (newest) {
+                this._carouselIndex = 0;
+                this._lastLatestKey = newest.link || newest.title || '';
+            }
         }
         catch (error) {
             console.error('HASS RSS refresh failed', error);

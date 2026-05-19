@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import calendar
 import re
+from datetime import datetime, timezone
 from html import unescape
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -85,11 +87,44 @@ def extract_item_image(entry: dict[str, Any], feed_url: str) -> str | None:
     return None
 
 
+def entry_published_iso(entry: dict[str, Any]) -> str:
+    """Return the best available ISO publish date for a feed entry."""
+    for field in ("published_parsed", "updated_parsed", "created_parsed"):
+        parsed = entry.get(field)
+        if parsed:
+            try:
+                return datetime.fromtimestamp(
+                    calendar.timegm(parsed), tz=timezone.utc
+                ).isoformat()
+            except (ValueError, OverflowError, OSError):
+                continue
+    return entry.get("published") or entry.get("updated") or ""
+
+
+def entry_published_timestamp(entry: dict[str, Any]) -> float:
+    """Return a sortable timestamp for a feed entry."""
+    for field in ("published_parsed", "updated_parsed", "created_parsed"):
+        parsed = entry.get(field)
+        if parsed:
+            try:
+                return float(calendar.timegm(parsed))
+            except (ValueError, OverflowError, OSError):
+                continue
+    published = entry.get("published") or entry.get("updated") or ""
+    if not published:
+        return 0.0
+    try:
+        normalized = published.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).timestamp()
+    except ValueError:
+        return 0.0
+
+
 def parse_entry(entry: dict[str, Any], feed_url: str) -> dict[str, Any]:
     """Normalize a feedparser entry into a dict for entity attributes."""
     title = entry.get("title", "Untitled")
     link = entry.get("link") or entry.get("id") or ""
-    published = entry.get("published") or entry.get("updated") or ""
+    published = entry_published_iso(entry)
 
     summary_raw = entry.get("summary") or entry.get("description") or ""
     if isinstance(summary_raw, list):

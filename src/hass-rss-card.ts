@@ -22,7 +22,7 @@ import {
   SPEED_PRESET_VALUES,
   type SpeedPreset,
 } from './types';
-import { getFeedEntityIds, mergeFeedItems } from './utils/merge-items';
+import { getFeedEntityIds, getNewestItem, mergeFeedItems } from './utils/merge-items';
 import { isNewItem, isRead, markRead } from './utils/read-state';
 import { formatRelativeTime } from './utils/relative-time';
 import { prefersReducedMotion, resolveDirection } from './utils/rtl';
@@ -71,8 +71,9 @@ export class HassRssCard extends LitElement {
   updated(changed: Map<string, unknown>): void {
     if (changed.has('hass') || changed.has('_config')) {
       const items = this._getItems();
-      if (this._config?.always_show_latest && items.length > 0) {
-        const latestKey = items[0].link || items[0].title || '';
+      const newest = getNewestItem(items);
+      if (newest) {
+        const latestKey = newest.link || newest.title || '';
         if (latestKey && latestKey !== this._lastLatestKey) {
           this._carouselIndex = 0;
           this._lastLatestKey = latestKey;
@@ -465,6 +466,12 @@ export class HassRssCard extends LitElement {
     try {
       await this.hass.callService('hass_rss', 'refresh_all');
       await this._waitForStateChange(entities, statesBefore, 15000);
+      const items = this._getItems();
+      const newest = getNewestItem(items);
+      if (newest) {
+        this._carouselIndex = 0;
+        this._lastLatestKey = newest.link || newest.title || '';
+      }
     } catch (error) {
       console.error('HASS RSS refresh failed', error);
     } finally {

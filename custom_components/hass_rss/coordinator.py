@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_MAX_ITEMS, CONF_NAME, CONF_URL, DEFAULT_HEADERS, DEFAULT_MAX_ITEMS
-from .parser import parse_entry
+from .parser import entry_published_timestamp, parse_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -92,8 +92,13 @@ class HassRssCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if parsed.bozo and not parsed.entries:
             raise UpdateFailed(f"Invalid feed: {parsed.bozo_exception}")
 
+        entries = sorted(
+            parsed.entries,
+            key=entry_published_timestamp,
+            reverse=True,
+        )
         items = []
-        for entry in parsed.entries[: self.max_items]:
+        for entry in entries[: self.max_items]:
             items.append(parse_entry(entry, self.feed_url))
 
         latest = items[0] if items else None
