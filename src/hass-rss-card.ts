@@ -47,6 +47,8 @@ export class HassRssCard extends LitElement {
 
   @state() private _tickerPaused = false;
 
+  @state() private _carouselHoverPaused = false;
+
   @state() private _readVersion = 0;
 
   @state() private _articleDialog: {
@@ -289,7 +291,17 @@ export class HassRssCard extends LitElement {
 
     if (useCarousel || useIndex) {
       return html`
-        <div class="carousel-container">
+        <div
+          class="carousel-container"
+          @mouseenter=${() => {
+            if ((this._config.animation?.pause_on_hover ?? true) !== false) {
+              this._carouselHoverPaused = true;
+            }
+          }}
+          @mouseleave=${() => {
+            this._carouselHoverPaused = false;
+          }}
+        >
           ${this._renderCompactItem(
             item,
             features,
@@ -356,11 +368,12 @@ export class HassRssCard extends LitElement {
   ): TemplateResult {
     void this._readVersion;
     const animation = this._config.animation ?? {};
+    const isScrollTicker =
+      animation.enabled !== false && animation.type === 'ticker';
     const useCarousel =
-      animation.enabled !== false &&
-      animation.type === 'carousel' &&
-      !prefersReducedMotion() &&
-      items.length > 1;
+      !isScrollTicker &&
+      items.length > 1 &&
+      !prefersReducedMotion();
 
     if (useCarousel) {
       const index = this._normalizeIndex(items);
@@ -373,10 +386,12 @@ export class HassRssCard extends LitElement {
           class="ticker-wrap ticker-single"
           dir=${dir}
           @mouseenter=${() => {
-            if (animation.pause_on_hover) this._tickerPaused = true;
+            if (animation.pause_on_hover !== false) {
+              this._carouselHoverPaused = true;
+            }
           }}
           @mouseleave=${() => {
-            this._tickerPaused = false;
+            this._carouselHoverPaused = false;
           }}
         >
           <div
@@ -664,7 +679,6 @@ export class HassRssCard extends LitElement {
       return;
     }
     this._carouselIndex = (this._carouselIndex + delta + count) % count;
-    this._tickerPaused = true;
     this.requestUpdate();
   }
 
@@ -792,7 +806,6 @@ export class HassRssCard extends LitElement {
       items.length > 1
     ) {
       this._carouselIndex = (index + 1) % items.length;
-      this._tickerPaused = true;
       this.requestUpdate();
     }
   }
@@ -991,13 +1004,46 @@ export class HassRssCard extends LitElement {
     const display = this._config?.display ?? {};
     return [
       display.preset ?? 'compact',
-      String(animation.enabled ?? false),
+      String(animation.auto_advance ?? true),
       animation.type ?? '',
       String(animation.interval ?? 5),
       String(this._getItems().length),
       this._getSourceSelection(),
       (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
     ].join(':');
+  }
+
+  private _shouldAutoAdvance(): boolean {
+    const animation = this._config?.animation ?? {};
+    if (animation.auto_advance === false) {
+      return false;
+    }
+    if (prefersReducedMotion()) {
+      return false;
+    }
+    if (this._getItems().length <= 1) {
+      return false;
+    }
+
+    const preset = this._config?.display?.preset ?? 'compact';
+    if (preset === 'list' || preset === 'magazine') {
+      return false;
+    }
+
+    if (
+      preset === 'ticker' &&
+      animation.enabled !== false &&
+      animation.type === 'ticker'
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private _getAutoAdvanceIntervalMs(): number {
+    const seconds = this._config?.animation?.interval ?? 5;
+    return Math.max(3, seconds) * 1000;
   }
 
   private _ensureCarouselTimer(): void {
@@ -1026,6 +1072,9 @@ export class HassRssCard extends LitElement {
       if (!this._config.animation.interval) {
         this._config.animation.interval = 5;
       }
+      if (this._config.animation.auto_advance === undefined) {
+        this._config.animation.auto_advance = true;
+      }
     }
   }
 
@@ -1042,27 +1091,19 @@ export class HassRssCard extends LitElement {
 
   private _syncCarousel(): void {
     this._clearCarouselTimer();
-    const animation = this._config?.animation;
-    const items = this._getItems();
-    const preset = this._config?.display?.preset ?? 'compact';
-    const supportsCarousel =
-      preset === 'compact' || preset === 'ticker';
-
-    if (
-      !animation?.enabled ||
-      animation.type !== 'carousel' ||
-      !supportsCarousel ||
-      prefersReducedMotion() ||
-      items.length <= 1
-    ) {
+    if (!this._shouldAutoAdvance()) {
       return;
     }
 
-    const interval = (animation.interval ?? 5) * 1000;
+    const interval = this._getAutoAdvanceIntervalMs();
     this._carouselTimer = setInterval(() => {
-      if (this._tickerPaused) return;
+      if (this._carouselHoverPaused || this._articleDialog) {
+        return;
+      }
       const count = this._getItems().length;
-      if (count <= 1) return;
+      if (count <= 1) {
+        return;
+      }
       this._carouselIndex = (this._carouselIndex + 1) % count;
       this.requestUpdate();
     }, interval);

@@ -31,6 +31,12 @@ export class HassRssCardEditor extends LitElement {
       font-weight: 500;
       margin-bottom: 8px;
     }
+    .section-help {
+      margin: 0 0 12px;
+      font-size: 0.85em;
+      opacity: 0.8;
+      line-height: 1.4;
+    }
   `;
 
   public setConfig(config: HassRssCardConfig): void {
@@ -200,14 +206,30 @@ export class HassRssCardEditor extends LitElement {
 
   private _renderAnimation(): TemplateResult {
     const animation = this._config.animation ?? {};
-    const enabled = animation.enabled ?? false;
+    const autoAdvance = animation.auto_advance !== false;
     const isTickerScroll = animation.type === 'ticker';
-    const isCarousel = animation.type === 'carousel';
+    const isCarousel = animation.type !== 'ticker';
     const isCustomSpeed = animation.speed_preset === 'custom';
 
     const schema = [
+      { name: 'auto_advance', selector: { boolean: {} } },
+      ...(autoAdvance
+        ? [
+            {
+              name: 'interval',
+              selector: {
+                number: {
+                  min: 3,
+                  max: 120,
+                  step: 1,
+                  unit_of_measurement: 's',
+                },
+              },
+            },
+          ]
+        : []),
       { name: 'enabled', selector: { boolean: {} } },
-      ...(enabled
+      ...(animation.enabled !== false
         ? [
             {
               name: 'type',
@@ -222,14 +244,8 @@ export class HassRssCardEditor extends LitElement {
             },
           ]
         : []),
-      ...(enabled && isCarousel
+      ...(animation.enabled !== false && isCarousel && autoAdvance
         ? [
-            {
-              name: 'interval',
-              selector: {
-                number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
-              },
-            },
             {
               name: 'transition',
               selector: {
@@ -244,7 +260,7 @@ export class HassRssCardEditor extends LitElement {
             },
           ]
         : []),
-      ...(enabled && isTickerScroll
+      ...(animation.enabled !== false && isTickerScroll
         ? [
             {
               name: 'speed_preset',
@@ -276,7 +292,7 @@ export class HassRssCardEditor extends LitElement {
               : []),
           ]
         : []),
-      ...(enabled
+      ...(autoAdvance
         ? [{ name: 'pause_on_hover', selector: { boolean: {} } }]
         : []),
     ];
@@ -284,6 +300,11 @@ export class HassRssCardEditor extends LitElement {
     return html`
       <div class="section">
         <div class="section-title">Animation</div>
+        <p class="section-help">
+          Auto advance rotates to the next headline automatically.
+          Interval is the number of seconds each headline stays on screen
+          before switching to the next one.
+        </p>
         <ha-form
           .hass=${this.hass}
           .data=${animation}

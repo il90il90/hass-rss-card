@@ -40,6 +40,7 @@ export const DEFAULT_CONFIG: HassRssCardConfig = {
   },
   animation: {
     enabled: false,
+    auto_advance: true,
     type: 'carousel',
     speed_preset: 'medium',
     speed: 50,

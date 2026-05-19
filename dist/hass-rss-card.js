@@ -152,6 +152,7 @@ const DEFAULT_CONFIG = {
     },
     animation: {
         enabled: false,
+        auto_advance: true,
         type: 'carousel',
         speed_preset: 'medium',
         speed: 50,
@@ -349,13 +350,29 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     }
     _renderAnimation() {
         const animation = this._config.animation ?? {};
-        const enabled = animation.enabled ?? false;
+        const autoAdvance = animation.auto_advance !== false;
         const isTickerScroll = animation.type === 'ticker';
-        const isCarousel = animation.type === 'carousel';
+        const isCarousel = animation.type !== 'ticker';
         const isCustomSpeed = animation.speed_preset === 'custom';
         const schema = [
+            { name: 'auto_advance', selector: { boolean: {} } },
+            ...(autoAdvance
+                ? [
+                    {
+                        name: 'interval',
+                        selector: {
+                            number: {
+                                min: 3,
+                                max: 120,
+                                step: 1,
+                                unit_of_measurement: 's',
+                            },
+                        },
+                    },
+                ]
+                : []),
             { name: 'enabled', selector: { boolean: {} } },
-            ...(enabled
+            ...(animation.enabled !== false
                 ? [
                     {
                         name: 'type',
@@ -370,14 +387,8 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                     },
                 ]
                 : []),
-            ...(enabled && isCarousel
+            ...(animation.enabled !== false && isCarousel && autoAdvance
                 ? [
-                    {
-                        name: 'interval',
-                        selector: {
-                            number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
-                        },
-                    },
                     {
                         name: 'transition',
                         selector: {
@@ -392,7 +403,7 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                     },
                 ]
                 : []),
-            ...(enabled && isTickerScroll
+            ...(animation.enabled !== false && isTickerScroll
                 ? [
                     {
                         name: 'speed_preset',
@@ -424,13 +435,18 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                         : []),
                 ]
                 : []),
-            ...(enabled
+            ...(autoAdvance
                 ? [{ name: 'pause_on_hover', selector: { boolean: {} } }]
                 : []),
         ];
         return b `
       <div class="section">
         <div class="section-title">Animation</div>
+        <p class="section-help">
+          Auto advance rotates to the next headline automatically.
+          Interval is the number of seconds each headline stays on screen
+          before switching to the next one.
+        </p>
         <ha-form
           .hass=${this.hass}
           .data=${animation}
@@ -555,6 +571,12 @@ HassRssCardEditor.styles = i$4 `
       font-size: 1.1em;
       font-weight: 500;
       margin-bottom: 8px;
+    }
+    .section-help {
+      margin: 0 0 12px;
+      font-size: 0.85em;
+      opacity: 0.8;
+      line-height: 1.4;
     }
   `;
 __decorate([
@@ -1348,6 +1370,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         this._carouselIndex = 0;
         this._refreshing = false;
         this._tickerPaused = false;
+        this._carouselHoverPaused = false;
         this._readVersion = 0;
         this._articleDialog = null;
         this._lastLatestKey = '';
@@ -1539,7 +1562,17 @@ let HassRssCard = class HassRssCard extends i$1 {
         const item = items[index] ?? items[0];
         if (useCarousel || useIndex) {
             return b `
-        <div class="carousel-container">
+        <div
+          class="carousel-container"
+          @mouseenter=${() => {
+                if ((this._config.animation?.pause_on_hover ?? true) !== false) {
+                    this._carouselHoverPaused = true;
+                }
+            }}
+          @mouseleave=${() => {
+                this._carouselHoverPaused = false;
+            }}
+        >
           ${this._renderCompactItem(item, features, useCarousel ? animation.transition : undefined)}
           ${this._renderArticleNavigation(items, features, useIndex)}
         </div>
@@ -1590,10 +1623,10 @@ let HassRssCard = class HassRssCard extends i$1 {
     _renderTicker(items, dir, features) {
         void this._readVersion;
         const animation = this._config.animation ?? {};
-        const useCarousel = animation.enabled !== false &&
-            animation.type === 'carousel' &&
-            !prefersReducedMotion() &&
-            items.length > 1;
+        const isScrollTicker = animation.enabled !== false && animation.type === 'ticker';
+        const useCarousel = !isScrollTicker &&
+            items.length > 1 &&
+            !prefersReducedMotion();
         if (useCarousel) {
             const index = this._normalizeIndex(items);
             const item = items[index] ?? items[0];
@@ -1605,11 +1638,12 @@ let HassRssCard = class HassRssCard extends i$1 {
           class="ticker-wrap ticker-single"
           dir=${dir}
           @mouseenter=${() => {
-                if (animation.pause_on_hover)
-                    this._tickerPaused = true;
+                if (animation.pause_on_hover !== false) {
+                    this._carouselHoverPaused = true;
+                }
             }}
           @mouseleave=${() => {
-                this._tickerPaused = false;
+                this._carouselHoverPaused = false;
             }}
         >
           <div
@@ -1851,7 +1885,6 @@ let HassRssCard = class HassRssCard extends i$1 {
             return;
         }
         this._carouselIndex = (this._carouselIndex + delta + count) % count;
-        this._tickerPaused = true;
         this.requestUpdate();
     }
     _getSourceOptions() {
@@ -1949,7 +1982,6 @@ let HassRssCard = class HassRssCard extends i$1 {
             index >= 0 &&
             items.length > 1) {
             this._carouselIndex = (index + 1) % items.length;
-            this._tickerPaused = true;
             this.requestUpdate();
         }
     }
@@ -2103,13 +2135,39 @@ let HassRssCard = class HassRssCard extends i$1 {
         const display = this._config?.display ?? {};
         return [
             display.preset ?? 'compact',
-            String(animation.enabled ?? false),
+            String(animation.auto_advance ?? true),
             animation.type ?? '',
             String(animation.interval ?? 5),
             String(this._getItems().length),
             this._getSourceSelection(),
             (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
         ].join(':');
+    }
+    _shouldAutoAdvance() {
+        const animation = this._config?.animation ?? {};
+        if (animation.auto_advance === false) {
+            return false;
+        }
+        if (prefersReducedMotion()) {
+            return false;
+        }
+        if (this._getItems().length <= 1) {
+            return false;
+        }
+        const preset = this._config?.display?.preset ?? 'compact';
+        if (preset === 'list' || preset === 'magazine') {
+            return false;
+        }
+        if (preset === 'ticker' &&
+            animation.enabled !== false &&
+            animation.type === 'ticker') {
+            return false;
+        }
+        return true;
+    }
+    _getAutoAdvanceIntervalMs() {
+        const seconds = this._config?.animation?.interval ?? 5;
+        return Math.max(3, seconds) * 1000;
     }
     _ensureCarouselTimer() {
         if (!this._config || !this.hass) {
@@ -2136,6 +2194,9 @@ let HassRssCard = class HassRssCard extends i$1 {
             if (!this._config.animation.interval) {
                 this._config.animation.interval = 5;
             }
+            if (this._config.animation.auto_advance === undefined) {
+                this._config.animation.auto_advance = true;
+            }
         }
     }
     _resolveSpeed(animation) {
@@ -2150,24 +2211,18 @@ let HassRssCard = class HassRssCard extends i$1 {
     }
     _syncCarousel() {
         this._clearCarouselTimer();
-        const animation = this._config?.animation;
-        const items = this._getItems();
-        const preset = this._config?.display?.preset ?? 'compact';
-        const supportsCarousel = preset === 'compact' || preset === 'ticker';
-        if (!animation?.enabled ||
-            animation.type !== 'carousel' ||
-            !supportsCarousel ||
-            prefersReducedMotion() ||
-            items.length <= 1) {
+        if (!this._shouldAutoAdvance()) {
             return;
         }
-        const interval = (animation.interval ?? 5) * 1000;
+        const interval = this._getAutoAdvanceIntervalMs();
         this._carouselTimer = setInterval(() => {
-            if (this._tickerPaused)
+            if (this._carouselHoverPaused || this._articleDialog) {
                 return;
+            }
             const count = this._getItems().length;
-            if (count <= 1)
+            if (count <= 1) {
                 return;
+            }
             this._carouselIndex = (this._carouselIndex + 1) % count;
             this.requestUpdate();
         }, interval);
@@ -2208,6 +2263,9 @@ __decorate([
 __decorate([
     r()
 ], HassRssCard.prototype, "_tickerPaused", void 0);
+__decorate([
+    r()
+], HassRssCard.prototype, "_carouselHoverPaused", void 0);
 __decorate([
     r()
 ], HassRssCard.prototype, "_readVersion", void 0);

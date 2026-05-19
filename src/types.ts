@@ -38,6 +38,7 @@ export interface ImageConfig {
 
 export interface AnimationConfig {
   enabled?: boolean;
+  auto_advance?: boolean;
   type?: AnimationType;
   speed_preset?: SpeedPreset;
   speed?: number;
