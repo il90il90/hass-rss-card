@@ -5,6 +5,11 @@ export const cardStyles = css`
     display: block;
   }
 
+  ha-dialog {
+    --mdc-dialog-max-width: min(960px, 96vw);
+    --mdc-dialog-min-width: min(320px, 96vw);
+  }
+
   ha-card {
     overflow: hidden;
     padding: 12px 16px;
@@ -193,6 +198,72 @@ export const cardStyles = css`
   .feed-name {
     font-size: 0.7em;
     opacity: 0.5;
+  }
+
+  .article-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0 12px;
+  }
+
+  .article-dialog-title {
+    font-size: 1em;
+    font-weight: 600;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .article-iframe {
+    width: 100%;
+    height: min(70vh, 640px);
+    border: none;
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+  }
+
+  .article-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 200px;
+  }
+
+  .article-preview-text {
+    opacity: 0.85;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .article-preview-note {
+    font-size: 0.85em;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+
+  .article-dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .article-dialog-btn {
+    cursor: pointer;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+    color: inherit;
+    font: inherit;
+    padding: 8px 14px;
+  }
+
+  .article-dialog-btn.primary {
+    background: var(--primary-color);
+    color: var(--text-primary-color, #fff);
+    border-color: var(--primary-color);
   }
 `;
 

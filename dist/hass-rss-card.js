@@ -168,6 +168,7 @@ const DEFAULT_CONFIG = {
         show_last_updated: true,
         show_article_navigation: true,
         advance_on_read: true,
+        open_articles_in: 'dialog',
         track_read_unread: true,
     },
     always_show_latest: true,
@@ -464,6 +465,17 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
             { name: 'show_source_selector', selector: { boolean: {} } },
             { name: 'show_article_navigation', selector: { boolean: {} } },
             { name: 'advance_on_read', selector: { boolean: {} } },
+            {
+                name: 'open_articles_in',
+                selector: {
+                    select: {
+                        options: [
+                            { value: 'dialog', label: 'In-app dialog' },
+                            { value: 'browser', label: 'Browser tab' },
+                        ],
+                    },
+                },
+            },
             { name: 'track_read_unread', selector: { boolean: {} } },
         ]}
           @value-changed=${(ev) => this._updateConfig('features', {
@@ -711,6 +723,11 @@ const cardStyles = i$4 `
     display: block;
   }
 
+  ha-dialog {
+    --mdc-dialog-max-width: min(960px, 96vw);
+    --mdc-dialog-min-width: min(320px, 96vw);
+  }
+
   ha-card {
     overflow: hidden;
     padding: 12px 16px;
@@ -899,6 +916,72 @@ const cardStyles = i$4 `
   .feed-name {
     font-size: 0.7em;
     opacity: 0.5;
+  }
+
+  .article-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0 12px;
+  }
+
+  .article-dialog-title {
+    font-size: 1em;
+    font-weight: 600;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .article-iframe {
+    width: 100%;
+    height: min(70vh, 640px);
+    border: none;
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+  }
+
+  .article-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 200px;
+  }
+
+  .article-preview-text {
+    opacity: 0.85;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .article-preview-note {
+    font-size: 0.85em;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+
+  .article-dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .article-dialog-btn {
+    cursor: pointer;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+    color: inherit;
+    font: inherit;
+    padding: 8px 14px;
+  }
+
+  .article-dialog-btn.primary {
+    background: var(--primary-color);
+    color: var(--text-primary-color, #fff);
+    border-color: var(--primary-color);
   }
 `;
 const imageStyles = i$4 `
@@ -1218,6 +1301,26 @@ function formatRelativeTime(published, locale) {
     return rtf.format(Math.round(diffSec / 2592000), 'month');
 }
 
+const IFRAME_BLOCKED_HOSTS = [
+    'ynet.co.il',
+    'walla.co.il',
+    'haaretz.co.il',
+    'calcalist.co.il',
+    'israelhayom.co.il',
+    'timesofisrael.com',
+    'n12.co.il',
+    'kan.org.il',
+];
+function canEmbedArticleUrl(url) {
+    try {
+        const hostname = new URL(url).hostname.replace(/^www\./, '');
+        return !IFRAME_BLOCKED_HOSTS.some((blocked) => hostname === blocked || hostname.endsWith(`.${blocked}`));
+    }
+    catch {
+        return false;
+    }
+}
+
 const RTL_CHAR_RE = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 function detectRtlFromText(text) {
     return RTL_CHAR_RE.test(text);
@@ -1246,6 +1349,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         this._refreshing = false;
         this._tickerPaused = false;
         this._readVersion = 0;
+        this._articleDialog = null;
         this._lastLatestKey = '';
         this._carouselSetupKey = '';
     }
@@ -1309,6 +1413,7 @@ let HassRssCard = class HassRssCard extends i$1 {
             ? this._renderEmpty()
             : this._renderPreset(preset, items, dir, features)}
       </ha-card>
+      ${this._renderArticleDialog()}
     `;
     }
     _renderHeader(features) {
@@ -1827,8 +1932,18 @@ let HassRssCard = class HassRssCard extends i$1 {
             markRead(item.link);
             this._readVersion += 1;
         }
+        const openMode = this._config.features?.open_articles_in ?? 'dialog';
         if (item.link) {
-            window.open(item.link, '_blank', 'noopener,noreferrer');
+            if (openMode === 'dialog') {
+                this._articleDialog = {
+                    url: item.link,
+                    title: item.title,
+                    summary: item.summary,
+                };
+            }
+            else {
+                window.open(item.link, '_blank', 'noopener,noreferrer');
+            }
         }
         if (this._config.features?.advance_on_read !== false &&
             index >= 0 &&
@@ -1837,6 +1952,73 @@ let HassRssCard = class HassRssCard extends i$1 {
             this._tickerPaused = true;
             this.requestUpdate();
         }
+    }
+    _closeArticleDialog() {
+        this._articleDialog = null;
+    }
+    _openArticleExternally(url) {
+        const target = url ?? this._articleDialog?.url;
+        if (target) {
+            window.open(target, '_blank', 'noopener,noreferrer');
+        }
+    }
+    _renderArticleDialog() {
+        const dialog = this._articleDialog;
+        if (!dialog) {
+            return A;
+        }
+        const canEmbed = canEmbedArticleUrl(dialog.url);
+        return b `
+      <ha-dialog
+        .open=${true}
+        hideActions
+        @closed=${this._closeArticleDialog}
+      >
+        <div class="article-dialog-header">
+          <div class="article-dialog-title">${dialog.title}</div>
+          <ha-icon-button
+            .path=${'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z'}
+            @click=${this._closeArticleDialog}
+          ></ha-icon-button>
+        </div>
+        ${canEmbed
+            ? b `
+              <iframe
+                class="article-iframe"
+                src=${dialog.url}
+                title=${dialog.title}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
+                loading="lazy"
+              ></iframe>
+            `
+            : b `
+              <div class="article-preview">
+                <p class="article-preview-note">
+                  This site cannot be embedded inside Home Assistant. You can
+                  read the summary below or open the full article in your
+                  browser without leaving the app on mobile.
+                </p>
+                ${dialog.summary
+                ? b `<p class="article-preview-text">${dialog.summary}</p>`
+                : A}
+              </div>
+            `}
+        <div class="article-dialog-actions">
+          <button
+            class="article-dialog-btn"
+            @click=${this._closeArticleDialog}
+          >
+            Close
+          </button>
+          <button
+            class="article-dialog-btn primary"
+            @click=${() => this._openArticleExternally(dialog.url)}
+          >
+            Open in browser
+          </button>
+        </div>
+      </ha-dialog>
+    `;
     }
     async _handleRefresh() {
         if (this._refreshing || !this.hass)
@@ -2029,6 +2211,9 @@ __decorate([
 __decorate([
     r()
 ], HassRssCard.prototype, "_readVersion", void 0);
+__decorate([
+    r()
+], HassRssCard.prototype, "_articleDialog", void 0);
 HassRssCard = __decorate([
     t$1('hass-rss-card')
 ], HassRssCard);

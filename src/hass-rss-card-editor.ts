@@ -321,6 +321,17 @@ export class HassRssCardEditor extends LitElement {
             { name: 'show_source_selector', selector: { boolean: {} } },
             { name: 'show_article_navigation', selector: { boolean: {} } },
             { name: 'advance_on_read', selector: { boolean: {} } },
+            {
+              name: 'open_articles_in',
+              selector: {
+                select: {
+                  options: [
+                    { value: 'dialog', label: 'In-app dialog' },
+                    { value: 'browser', label: 'Browser tab' },
+                  ],
+                },
+              },
+            },
             { name: 'track_read_unread', selector: { boolean: {} } },
           ]}
           @value-changed=${(ev: CustomEvent) =>

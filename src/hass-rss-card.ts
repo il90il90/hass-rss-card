@@ -32,6 +32,7 @@ import {
   resolveSourceOptions,
   type RssSourceOption,
 } from './utils/rss-entities';
+import { canEmbedArticleUrl } from './utils/article-open';
 import { prefersReducedMotion, resolveDirection } from './utils/rtl';
 
 @customElement('hass-rss-card')
@@ -47,6 +48,12 @@ export class HassRssCard extends LitElement {
   @state() private _tickerPaused = false;
 
   @state() private _readVersion = 0;
+
+  @state() private _articleDialog: {
+    url: string;
+    title: string;
+    summary?: string;
+  } | null = null;
 
   private _carouselTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -126,6 +133,7 @@ export class HassRssCard extends LitElement {
           ? this._renderEmpty()
           : this._renderPreset(preset, items, dir, features)}
       </ha-card>
+      ${this._renderArticleDialog()}
     `;
   }
 
@@ -764,8 +772,18 @@ export class HassRssCard extends LitElement {
       markRead(item.link);
       this._readVersion += 1;
     }
+
+    const openMode = this._config.features?.open_articles_in ?? 'dialog';
     if (item.link) {
-      window.open(item.link, '_blank', 'noopener,noreferrer');
+      if (openMode === 'dialog') {
+        this._articleDialog = {
+          url: item.link,
+          title: item.title,
+          summary: item.summary,
+        };
+      } else {
+        window.open(item.link, '_blank', 'noopener,noreferrer');
+      }
     }
 
     if (
@@ -777,6 +795,78 @@ export class HassRssCard extends LitElement {
       this._tickerPaused = true;
       this.requestUpdate();
     }
+  }
+
+  private _closeArticleDialog(): void {
+    this._articleDialog = null;
+  }
+
+  private _openArticleExternally(url?: string): void {
+    const target = url ?? this._articleDialog?.url;
+    if (target) {
+      window.open(target, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  private _renderArticleDialog(): TemplateResult | typeof nothing {
+    const dialog = this._articleDialog;
+    if (!dialog) {
+      return nothing;
+    }
+
+    const canEmbed = canEmbedArticleUrl(dialog.url);
+
+    return html`
+      <ha-dialog
+        .open=${true}
+        hideActions
+        @closed=${this._closeArticleDialog}
+      >
+        <div class="article-dialog-header">
+          <div class="article-dialog-title">${dialog.title}</div>
+          <ha-icon-button
+            .path=${'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z'}
+            @click=${this._closeArticleDialog}
+          ></ha-icon-button>
+        </div>
+        ${canEmbed
+          ? html`
+              <iframe
+                class="article-iframe"
+                src=${dialog.url}
+                title=${dialog.title}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
+                loading="lazy"
+              ></iframe>
+            `
+          : html`
+              <div class="article-preview">
+                <p class="article-preview-note">
+                  This site cannot be embedded inside Home Assistant. You can
+                  read the summary below or open the full article in your
+                  browser without leaving the app on mobile.
+                </p>
+                ${dialog.summary
+                  ? html`<p class="article-preview-text">${dialog.summary}</p>`
+                  : nothing}
+              </div>
+            `}
+        <div class="article-dialog-actions">
+          <button
+            class="article-dialog-btn"
+            @click=${this._closeArticleDialog}
+          >
+            Close
+          </button>
+          <button
+            class="article-dialog-btn primary"
+            @click=${() => this._openArticleExternally(dialog.url)}
+          >
+            Open in browser
+          </button>
+        </div>
+      </ha-dialog>
+    `;
   }
 
   private async _handleRefresh(): Promise<void> {

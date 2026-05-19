@@ -55,8 +55,11 @@ export interface FeaturesConfig {
   show_last_updated?: boolean;
   show_article_navigation?: boolean;
   advance_on_read?: boolean;
+  open_articles_in?: ArticleOpenMode;
   track_read_unread?: boolean;
 }
+
+export type ArticleOpenMode = 'dialog' | 'browser';
 
 export interface DisplayConfig {
   preset?: DisplayPreset;
