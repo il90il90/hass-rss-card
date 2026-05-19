@@ -1546,12 +1546,14 @@ let HassRssCard = class HassRssCard extends i$1 {
     _snapshotEntities(entities) {
         return new Map(entities.map((entityId) => {
             const entity = this.hass.states[entityId];
+            const items = entity?.attributes?.items;
             return [
                 entityId,
                 {
                     state: entity?.state,
                     lastUpdated: entity?.last_updated,
                     lastSuccess: entity?.attributes?.last_success,
+                    newestTitle: items?.[0]?.title,
                 },
             ];
         }));
@@ -1563,9 +1565,12 @@ let HassRssCard = class HassRssCard extends i$1 {
             if (!entity || !previous) {
                 return false;
             }
+            const items = entity.attributes?.items;
+            const newestTitle = items?.[0]?.title;
             return (entity.state !== previous.state ||
                 entity.last_updated !== previous.lastUpdated ||
-                entity.attributes?.last_success !== previous.lastSuccess);
+                entity.attributes?.last_success !== previous.lastSuccess ||
+                newestTitle !== previous.newestTitle);
         });
     }
     _waitForEntityRefresh(entities, before, timeoutMs) {

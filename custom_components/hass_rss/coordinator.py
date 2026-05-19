@@ -34,8 +34,6 @@ class HassRssCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.feed_name = config[CONF_NAME]
         self.feed_url = config[CONF_URL]
         self.max_items = config.get(CONF_MAX_ITEMS, DEFAULT_MAX_ITEMS)
-        self._etag: str | None = None
-        self._modified: str | None = None
         self._last_guid: str | None = None
         self.last_error: str | None = None
         self.config = config
@@ -50,28 +48,14 @@ class HassRssCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         session = async_get_clientsession(self.hass)
         headers: dict[str, str] = dict(DEFAULT_HEADERS)
-        if self._etag:
-            headers["If-None-Match"] = self._etag
-        if self._modified:
-            headers["If-Modified-Since"] = self._modified
 
         try:
             async with asyncio.timeout(30):
                 async with session.get(self.feed_url, headers=headers) as response:
-                    if response.status == 304:
-                        if self.data:
-                            return {
-                                **self.data,
-                                "last_success": dt_util.utcnow().isoformat(),
-                            }
-                        raise UpdateFailed("Feed not modified but no cached data")
-
                     if response.status >= 400:
                         raise UpdateFailed(f"HTTP {response.status}")
 
                     content = await response.text()
-                    self._etag = response.headers.get("ETag")
-                    self._modified = response.headers.get("Last-Modified")
         except TimeoutError as err:
             self.last_error = "Timeout fetching feed"
             raise UpdateFailed(self.last_error) from err
@@ -86,6 +70,10 @@ class HassRssCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise
         self.last_error = None
         return result
+
+    async def async_force_refresh(self) -> None:
+        """Fetch the feed again without conditional HTTP caching."""
+        await self.async_request_refresh()
 
     def _parse_feed(self, content: str) -> dict[str, Any]:
         parsed = feedparser.parse(content)

@@ -499,17 +499,24 @@ export class HassRssCard extends LitElement {
     entities: string[],
   ): Map<
     string,
-    { state?: string; lastUpdated?: string; lastSuccess?: string }
+    {
+      state?: string;
+      lastUpdated?: string;
+      lastSuccess?: string;
+      newestTitle?: string;
+    }
   > {
     return new Map(
       entities.map((entityId) => {
         const entity = this.hass.states[entityId];
+        const items = entity?.attributes?.items as RssItem[] | undefined;
         return [
           entityId,
           {
             state: entity?.state,
             lastUpdated: entity?.last_updated,
             lastSuccess: entity?.attributes?.last_success as string | undefined,
+            newestTitle: items?.[0]?.title,
           },
         ];
       }),
@@ -520,7 +527,12 @@ export class HassRssCard extends LitElement {
     entities: string[],
     before: Map<
       string,
-      { state?: string; lastUpdated?: string; lastSuccess?: string }
+      {
+        state?: string;
+        lastUpdated?: string;
+        lastSuccess?: string;
+        newestTitle?: string;
+      }
     >,
   ): boolean {
     return entities.some((entityId) => {
@@ -529,10 +541,13 @@ export class HassRssCard extends LitElement {
       if (!entity || !previous) {
         return false;
       }
+      const items = entity.attributes?.items as RssItem[] | undefined;
+      const newestTitle = items?.[0]?.title;
       return (
         entity.state !== previous.state ||
         entity.last_updated !== previous.lastUpdated ||
-        entity.attributes?.last_success !== previous.lastSuccess
+        entity.attributes?.last_success !== previous.lastSuccess ||
+        newestTitle !== previous.newestTitle
       );
     });
   }
@@ -541,7 +556,12 @@ export class HassRssCard extends LitElement {
     entities: string[],
     before: Map<
       string,
-      { state?: string; lastUpdated?: string; lastSuccess?: string }
+      {
+        state?: string;
+        lastUpdated?: string;
+        lastSuccess?: string;
+        newestTitle?: string;
+      }
     >,
     timeoutMs: number,
   ): Promise<void> {

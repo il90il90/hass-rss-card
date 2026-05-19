@@ -132,7 +132,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 entry_id = entity.config_entry_id
 
         if entry_id and entry_id in hass.data.get(DOMAIN, {}):
-            await hass.data[DOMAIN][entry_id]["coordinator"].async_request_refresh()
+            await hass.data[DOMAIN][entry_id]["coordinator"].async_force_refresh()
             return
 
         if entity_id:
@@ -140,14 +140,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             feed_name = state.attributes.get("feed_name") if state else None
             for eid, data in hass.data.get(DOMAIN, {}).items():
                 if data["config"].get(CONF_NAME) == feed_name:
-                    await data["coordinator"].async_request_refresh()
+                    await data["coordinator"].async_force_refresh()
                     return
             _LOGGER.warning(
                 "Could not resolve feed for %s, refreshing all feeds", entity_id
             )
 
         for data in hass.data.get(DOMAIN, {}).values():
-            await data["coordinator"].async_request_refresh()
+            await data["coordinator"].async_force_refresh()
 
     async def refresh_all(_call: ServiceCall) -> None:
         coordinators = [
@@ -157,7 +157,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             _LOGGER.warning("refresh_all called but no HASS RSS feeds are loaded")
             return
         await asyncio.gather(
-            *(coordinator.async_request_refresh() for coordinator in coordinators)
+            *(coordinator.async_force_refresh() for coordinator in coordinators)
         )
 
     hass.services.async_register(

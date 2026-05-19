@@ -39,4 +39,6 @@ DEFAULT_HEADERS = {
         "Mozilla/5.0 (compatible; HASS-RSS/1.0; +https://github.com/hass-rss-card)"
     ),
     "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
