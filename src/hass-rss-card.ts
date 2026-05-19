@@ -26,7 +26,12 @@ import {
 import { getFeedEntityIds, getNewestItem, mergeFeedItems } from './utils/merge-items';
 import { isNewItem, isRead, markRead } from './utils/read-state';
 import { formatRelativeTime } from './utils/relative-time';
-import { resolveSourceOptions, type RssSourceOption } from './utils/rss-entities';
+import {
+  ALL_SOURCES,
+  isAllSources,
+  resolveSourceOptions,
+  type RssSourceOption,
+} from './utils/rss-entities';
 import { prefersReducedMotion, resolveDirection } from './utils/rtl';
 
 @customElement('hass-rss-card')
@@ -134,7 +139,7 @@ export class HassRssCard extends LitElement {
       return nothing;
     }
 
-    const activeSource = this._resolveActiveSource(sources);
+    const selection = this._getSourceSelection();
 
     return html`
       <div class="header">
@@ -145,10 +150,11 @@ export class HassRssCard extends LitElement {
                   <ha-icon icon="mdi:rss"></ha-icon>
                   <select
                     class="source-select"
-                    .value=${activeSource}
+                    .value=${selection}
                     @change=${this._onSourceChange}
                     @click=${(event: Event) => event.stopPropagation()}
                   >
+                    <option value=${ALL_SOURCES}>All sources</option>
                     ${sources.map(
                       (source) => html`
                         <option value=${source.entity}>${source.name}</option>
@@ -160,7 +166,7 @@ export class HassRssCard extends LitElement {
             : html`
                 <span class="header-title">
                   <ha-icon icon="mdi:rss"></ha-icon>
-                  ${sources[0]?.name ?? 'RSS'}
+                  ${this._getSourceLabel(sources)}
                 </span>
               `}
         </div>
@@ -224,20 +230,13 @@ export class HassRssCard extends LitElement {
 
   private _renderEmpty(): TemplateResult {
     const sources = this._getSourceOptions();
-    const feeds = this._config.feeds ?? [];
 
     if (sources.length === 0) {
       return html`
         <div class="empty">
           No RSS sensors found. Add a feed in Settings → Devices &amp; Services →
-          HASS RSS, then pick a source above.
+          HASS RSS.
         </div>
-      `;
-    }
-
-    if (feeds.length === 0 && sources.length > 0) {
-      return html`
-        <div class="empty">Choose a source above to show its headlines.</div>
       `;
     }
 
@@ -558,12 +557,30 @@ export class HassRssCard extends LitElement {
     return resolveSourceOptions(this.hass, this._config.feeds ?? []);
   }
 
-  private _resolveActiveSource(sources: RssSourceOption[]): string {
+  private _getSourceSelection(): string {
+    const sources = this._getSourceOptions();
     const active = this._config.active_source;
+
+    if (isAllSources(active)) {
+      return ALL_SOURCES;
+    }
+
     if (active && sources.some((source) => source.entity === active)) {
       return active;
     }
-    return sources[0]?.entity ?? '';
+
+    return ALL_SOURCES;
+  }
+
+  private _getSourceLabel(sources: RssSourceOption[]): string {
+    if (isAllSources(this._config.active_source)) {
+      return 'All sources';
+    }
+
+    const active = sources.find(
+      (source) => source.entity === this._config.active_source,
+    );
+    return active?.name ?? sources[0]?.name ?? 'RSS';
   }
 
   private _getActiveFeeds(): FeedConfig[] {
@@ -572,10 +589,17 @@ export class HassRssCard extends LitElement {
       return [];
     }
 
-    const showSelector = this._config.features?.show_source_selector !== false;
-    if (showSelector || sources.length === 1) {
-      const active = this._resolveActiveSource(sources);
-      return active ? [{ entity: active }] : [];
+    if (sources.length === 1) {
+      return [{ entity: sources[0].entity }];
+    }
+
+    if (isAllSources(this._config.active_source)) {
+      return sources.map((source) => ({ entity: source.entity }));
+    }
+
+    const active = this._config.active_source;
+    if (active && sources.some((source) => source.entity === active)) {
+      return [{ entity: active }];
     }
 
     return sources.map((source) => ({ entity: source.entity }));
@@ -754,7 +778,7 @@ export class HassRssCard extends LitElement {
       animation.type ?? '',
       String(animation.interval ?? 5),
       String(this._getItems().length),
-      this._resolveActiveSource(this._getSourceOptions()),
+      this._getSourceSelection(),
       (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
     ].join(':');
   }
@@ -844,15 +868,10 @@ export class HassRssCard extends LitElement {
   }
 
   public static getStubConfig(hass?: HomeAssistant): HassRssCardConfig {
-    const entity =
-      hass &&
-      Object.keys(hass.states).find((id) =>
-        id.startsWith('sensor.') &&
-        hass.states[id]?.attributes?.feed_name,
-      );
+    void hass;
     return {
       ...DEFAULT_CONFIG,
-      feeds: entity ? [{ entity }] : [],
+      feeds: [],
     };
   }
 }

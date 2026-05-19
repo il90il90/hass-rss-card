@@ -1,4 +1,5 @@
 import type { HassRssCardConfig } from './types';
+import { ALL_SOURCES } from './utils/rss-entities';
 
 export function mergeConfig(config: HassRssCardConfig): HassRssCardConfig {
   return {
@@ -25,6 +26,7 @@ export function mergeConfig(config: HassRssCardConfig): HassRssCardConfig {
 
 export const DEFAULT_CONFIG: HassRssCardConfig = {
   feeds: [],
+  active_source: ALL_SOURCES,
   display: {
     preset: 'compact',
     show: 'title_image',

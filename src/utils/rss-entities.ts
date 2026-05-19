@@ -1,5 +1,7 @@
 import type { FeedConfig, HomeAssistant } from '../types';
 
+export const ALL_SOURCES = '__all__';
+
 export interface RssSourceOption {
   entity: string;
   name: string;
@@ -39,4 +41,8 @@ export function resolveSourceOptions(
     }));
   }
   return listRssSensorEntities(hass);
+}
+
+export function isAllSources(activeSource?: string): boolean {
+  return !activeSource || activeSource === ALL_SOURCES;
 }

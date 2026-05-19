@@ -85,6 +85,35 @@ const t={ATTRIBUTE:1},e$1=t=>(...e)=>({_$litDirective$:t,values:e});class i{cons
  * SPDX-License-Identifier: BSD-3-Clause
  */const e=e$1(class extends i{constructor(t$1){if(super(t$1),t$1.type!==t.ATTRIBUTE||"class"!==t$1.name||t$1.strings?.length>2)throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.")}render(t){return " "+Object.keys(t).filter(s=>t[s]).join(" ")+" "}update(s,[i]){if(void 0===this.st){this.st=new Set,void 0!==s.strings&&(this.nt=new Set(s.strings.join(" ").split(/\s/).filter(t=>""!==t)));for(const t in i)i[t]&&!this.nt?.has(t)&&this.st.add(t);return this.render(i)}const r=s.element.classList;for(const t of this.st)t in i||(r.remove(t),this.st.delete(t));for(const t in i){const s=!!i[t];s===this.st.has(t)||this.nt?.has(t)||(s?(r.add(t),this.st.add(t)):(r.remove(t),this.st.delete(t)));}return E}});
 
+const ALL_SOURCES = '__all__';
+function getFeedLabel(hass, entityId) {
+    const attrs = hass.states[entityId]?.attributes;
+    return String(attrs?.feed_name ?? entityId);
+}
+function listRssSensorEntities(hass) {
+    return Object.keys(hass.states)
+        .filter((entityId) => entityId.startsWith('sensor.') &&
+        hass.states[entityId]?.attributes?.feed_name !== undefined)
+        .map((entityId) => ({
+        entity: entityId,
+        name: getFeedLabel(hass, entityId),
+    }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+function resolveSourceOptions(hass, configuredFeeds) {
+    const configured = configuredFeeds.filter((feed) => feed.entity?.trim());
+    if (configured.length > 0) {
+        return configured.map((feed) => ({
+            entity: feed.entity,
+            name: getFeedLabel(hass, feed.entity),
+        }));
+    }
+    return listRssSensorEntities(hass);
+}
+function isAllSources(activeSource) {
+    return !activeSource || activeSource === ALL_SOURCES;
+}
+
 function mergeConfig(config) {
     return {
         ...DEFAULT_CONFIG,
@@ -109,6 +138,7 @@ function mergeConfig(config) {
 }
 const DEFAULT_CONFIG = {
     feeds: [],
+    active_source: ALL_SOURCES,
     display: {
         preset: 'compact',
         show: 'title_image',
@@ -164,10 +194,44 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
         if (!this.hass || !this._config)
             return b ``;
         return b `
+      ${this._renderSources()}
       ${this._renderDisplay()}
       ${this._renderAnimation()}
       ${this._renderFeatures()}
       ${this._renderLayout()}
+    `;
+    }
+    _renderSources() {
+        const sourceOptions = listRssSensorEntities(this.hass);
+        const options = [
+            { value: ALL_SOURCES, label: 'All sources' },
+            ...sourceOptions.map((source) => ({
+                value: source.entity,
+                label: source.name,
+            })),
+        ];
+        return b `
+      <div class="section">
+        <div class="section-title">Sources</div>
+        <ha-form
+          .hass=${this.hass}
+          .data=${{
+            active_source: this._config.active_source ?? ALL_SOURCES,
+        }}
+          .schema=${[
+            {
+                name: 'active_source',
+                selector: {
+                    select: {
+                        mode: 'dropdown',
+                        options,
+                    },
+                },
+            },
+        ]}
+          @value-changed=${(ev) => this._updateConfig('active_source', ev.detail.value.active_source)}
+        ></ha-form>
+      </div>
     `;
     }
     _renderDisplay() {
@@ -1099,31 +1163,6 @@ function formatRelativeTime(published, locale) {
     return rtf.format(Math.round(diffSec / 2592000), 'month');
 }
 
-function getFeedLabel(hass, entityId) {
-    const attrs = hass.states[entityId]?.attributes;
-    return String(attrs?.feed_name ?? entityId);
-}
-function listRssSensorEntities(hass) {
-    return Object.keys(hass.states)
-        .filter((entityId) => entityId.startsWith('sensor.') &&
-        hass.states[entityId]?.attributes?.feed_name !== undefined)
-        .map((entityId) => ({
-        entity: entityId,
-        name: getFeedLabel(hass, entityId),
-    }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-}
-function resolveSourceOptions(hass, configuredFeeds) {
-    const configured = configuredFeeds.filter((feed) => feed.entity?.trim());
-    if (configured.length > 0) {
-        return configured.map((feed) => ({
-            entity: feed.entity,
-            name: getFeedLabel(hass, feed.entity),
-        }));
-    }
-    return listRssSensorEntities(hass);
-}
-
 const RTL_CHAR_RE = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 function detectRtlFromText(text) {
     return RTL_CHAR_RE.test(text);
@@ -1224,7 +1263,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (!showSelector && !showRefresh) {
             return A;
         }
-        const activeSource = this._resolveActiveSource(sources);
+        const selection = this._getSourceSelection();
         return b `
       <div class="header">
         <div class="header-left">
@@ -1234,10 +1273,11 @@ let HassRssCard = class HassRssCard extends i$1 {
                   <ha-icon icon="mdi:rss"></ha-icon>
                   <select
                     class="source-select"
-                    .value=${activeSource}
+                    .value=${selection}
                     @change=${this._onSourceChange}
                     @click=${(event) => event.stopPropagation()}
                   >
+                    <option value=${ALL_SOURCES}>All sources</option>
                     ${sources.map((source) => b `
                         <option value=${source.entity}>${source.name}</option>
                       `)}
@@ -1247,7 +1287,7 @@ let HassRssCard = class HassRssCard extends i$1 {
             : b `
                 <span class="header-title">
                   <ha-icon icon="mdi:rss"></ha-icon>
-                  ${sources[0]?.name ?? 'RSS'}
+                  ${this._getSourceLabel(sources)}
                 </span>
               `}
         </div>
@@ -1298,18 +1338,12 @@ let HassRssCard = class HassRssCard extends i$1 {
     }
     _renderEmpty() {
         const sources = this._getSourceOptions();
-        const feeds = this._config.feeds ?? [];
         if (sources.length === 0) {
             return b `
         <div class="empty">
           No RSS sensors found. Add a feed in Settings → Devices &amp; Services →
-          HASS RSS, then pick a source above.
+          HASS RSS.
         </div>
-      `;
-        }
-        if (feeds.length === 0 && sources.length > 0) {
-            return b `
-        <div class="empty">Choose a source above to show its headlines.</div>
       `;
         }
         const activeFeeds = this._getActiveFeeds();
@@ -1576,22 +1610,38 @@ let HassRssCard = class HassRssCard extends i$1 {
         }
         return resolveSourceOptions(this.hass, this._config.feeds ?? []);
     }
-    _resolveActiveSource(sources) {
+    _getSourceSelection() {
+        const sources = this._getSourceOptions();
         const active = this._config.active_source;
+        if (isAllSources(active)) {
+            return ALL_SOURCES;
+        }
         if (active && sources.some((source) => source.entity === active)) {
             return active;
         }
-        return sources[0]?.entity ?? '';
+        return ALL_SOURCES;
+    }
+    _getSourceLabel(sources) {
+        if (isAllSources(this._config.active_source)) {
+            return 'All sources';
+        }
+        const active = sources.find((source) => source.entity === this._config.active_source);
+        return active?.name ?? sources[0]?.name ?? 'RSS';
     }
     _getActiveFeeds() {
         const sources = this._getSourceOptions();
         if (sources.length === 0) {
             return [];
         }
-        const showSelector = this._config.features?.show_source_selector !== false;
-        if (showSelector || sources.length === 1) {
-            const active = this._resolveActiveSource(sources);
-            return active ? [{ entity: active }] : [];
+        if (sources.length === 1) {
+            return [{ entity: sources[0].entity }];
+        }
+        if (isAllSources(this._config.active_source)) {
+            return sources.map((source) => ({ entity: source.entity }));
+        }
+        const active = this._config.active_source;
+        if (active && sources.some((source) => source.entity === active)) {
+            return [{ entity: active }];
         }
         return sources.map((source) => ({ entity: source.entity }));
     }
@@ -1720,7 +1770,7 @@ let HassRssCard = class HassRssCard extends i$1 {
             animation.type ?? '',
             String(animation.interval ?? 5),
             String(this._getItems().length),
-            this._resolveActiveSource(this._getSourceOptions()),
+            this._getSourceSelection(),
             (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
         ].join(':');
     }
@@ -1799,12 +1849,9 @@ let HassRssCard = class HassRssCard extends i$1 {
         return document.createElement('hass-rss-card-editor');
     }
     static getStubConfig(hass) {
-        const entity = hass &&
-            Object.keys(hass.states).find((id) => id.startsWith('sensor.') &&
-                hass.states[id]?.attributes?.feed_name);
         return {
             ...DEFAULT_CONFIG,
-            feeds: entity ? [{ entity }] : [],
+            feeds: [],
         };
     }
 };

@@ -4,6 +4,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { mergeConfig } from './config-defaults';
 import type { FeedConfig, HassRssCardConfig, HomeAssistant } from './types';
 import { showIncludesImage } from './types';
+import {
+  ALL_SOURCES,
+  listRssSensorEntities,
+} from './utils/rss-entities';
 
 @customElement('hass-rss-card-editor')
 export class HassRssCardEditor extends LitElement {
@@ -37,10 +41,47 @@ export class HassRssCardEditor extends LitElement {
     if (!this.hass || !this._config) return html``;
 
     return html`
+      ${this._renderSources()}
       ${this._renderDisplay()}
       ${this._renderAnimation()}
       ${this._renderFeatures()}
       ${this._renderLayout()}
+    `;
+  }
+
+  private _renderSources(): TemplateResult {
+    const sourceOptions = listRssSensorEntities(this.hass);
+    const options = [
+      { value: ALL_SOURCES, label: 'All sources' },
+      ...sourceOptions.map((source) => ({
+        value: source.entity,
+        label: source.name,
+      })),
+    ];
+
+    return html`
+      <div class="section">
+        <div class="section-title">Sources</div>
+        <ha-form
+          .hass=${this.hass}
+          .data=${{
+            active_source: this._config.active_source ?? ALL_SOURCES,
+          }}
+          .schema=${[
+            {
+              name: 'active_source',
+              selector: {
+                select: {
+                  mode: 'dropdown',
+                  options,
+                },
+              },
+            },
+          ]}
+          @value-changed=${(ev: CustomEvent) =>
+            this._updateConfig('active_source', ev.detail.value.active_source)}
+        ></ha-form>
+      </div>
     `;
   }
 
