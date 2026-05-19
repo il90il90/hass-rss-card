@@ -53,6 +53,8 @@ export interface FeaturesConfig {
   show_refresh_button?: boolean;
   show_source_selector?: boolean;
   show_last_updated?: boolean;
+  show_article_navigation?: boolean;
+  advance_on_read?: boolean;
   track_read_unread?: boolean;
 }
 

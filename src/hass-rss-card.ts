@@ -121,7 +121,7 @@ export class HassRssCard extends LitElement {
         dir=${dir}
       >
         ${this._renderHeader(features)}
-        ${this._renderLastUpdated(features)}
+        ${this._renderLastUpdated(features, dir)}
         ${items.length === 0
           ? this._renderEmpty()
           : this._renderPreset(preset, items, dir, features)}
@@ -147,7 +147,6 @@ export class HassRssCard extends LitElement {
           ${showSelector
             ? html`
                 <label class="source-label">
-                  <ha-icon icon="mdi:rss"></ha-icon>
                   <select
                     class="source-select"
                     .value=${selection}
@@ -164,10 +163,7 @@ export class HassRssCard extends LitElement {
                 </label>
               `
             : html`
-                <span class="header-title">
-                  <ha-icon icon="mdi:rss"></ha-icon>
-                  ${this._getSourceLabel(sources)}
-                </span>
+                <span class="header-title">${this._getSourceLabel(sources)}</span>
               `}
         </div>
         ${showRefresh
@@ -190,6 +186,7 @@ export class HassRssCard extends LitElement {
 
   private _renderLastUpdated(
     features: FeaturesConfig,
+    dir: 'rtl' | 'ltr',
   ): TemplateResult | typeof nothing {
     if (features.show_last_updated === false) {
       return nothing;
@@ -200,10 +197,13 @@ export class HassRssCard extends LitElement {
       return nothing;
     }
 
-    const relative = formatRelativeTime(
-      lastSuccess,
-      this.hass.locale?.language,
-    );
+    const locale =
+      dir === 'rtl'
+        ? this.hass.locale?.language?.startsWith('he')
+          ? this.hass.locale.language
+          : 'he'
+        : this.hass.locale?.language;
+    const relative = formatRelativeTime(lastSuccess, locale);
     if (!relative) {
       return nothing;
     }
@@ -275,17 +275,23 @@ export class HassRssCard extends LitElement {
       animation.type === 'carousel' &&
       !prefersReducedMotion() &&
       items.length > 1;
+    const useIndex = this._usesArticleIndex(items, features, !!useCarousel);
+    const index = useIndex ? this._normalizeIndex(items) : 0;
+    const item = items[index] ?? items[0];
 
-    if (useCarousel) {
-      const item = items[this._carouselIndex] ?? items[0];
+    if (useCarousel || useIndex) {
       return html`
         <div class="carousel-container">
-          ${this._renderCompactItem(item, features, animation.transition)}
+          ${this._renderCompactItem(
+            item,
+            features,
+            useCarousel ? animation.transition : undefined,
+          )}
+          ${this._renderArticleNavigation(items, features, useIndex)}
         </div>
       `;
     }
 
-    const item = items[0];
     return this._renderCompactItem(item, features);
   }
 
@@ -322,12 +328,7 @@ export class HassRssCard extends LitElement {
                 @click=${() => this._openItem(item)}
               >${item.title}</span>
             </div>
-            ${features.show_relative_time
-              ? html`<span class="meta">${formatRelativeTime(
-                  item.published,
-                  this.hass.locale?.language,
-                )}</span>`
-              : nothing}
+            ${this._renderRelativeTime(item.published)}
           </div>
           ${showIncludesSummary(display.show)
             ? html`<div class="compact-summary">${item.summary ?? ''}</div>`
@@ -354,9 +355,11 @@ export class HassRssCard extends LitElement {
       items.length > 1;
 
     if (useCarousel) {
-      const item = items[this._carouselIndex] ?? items[0];
+      const index = this._normalizeIndex(items);
+      const item = items[index] ?? items[0];
       const display = this._config.display ?? {};
       const transition = animation.transition ?? 'fade';
+      const useIndex = this._usesArticleIndex(items, features, true);
       return html`
         <div
           class="ticker-wrap ticker-single"
@@ -370,20 +373,19 @@ export class HassRssCard extends LitElement {
         >
           <div
             class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
-            key=${`${this._carouselIndex}-${item.link}`}
+            key=${`${index}-${item.link}`}
           >
             ${this._renderImage(item, display, display.image ?? {}, 'small')}
             ${this._renderNewBadge(item, features)}
             <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
               ${item.title}
             </span>
-            ${features.show_relative_time
-              ? html`<span class="meta">${formatRelativeTime(
-                  item.published,
-                  this.hass.locale?.language,
-                )}</span>`
-              : nothing}
+            ${this._renderRelativeTime(item.published)}
           </div>
+          ${item.feed_name
+            ? html`<div class="feed-name">${item.feed_name}</div>`
+            : nothing}
+          ${this._renderArticleNavigation(items, features, useIndex)}
         </div>
       `;
     }
@@ -449,12 +451,7 @@ export class HassRssCard extends LitElement {
                 ${showIncludesSummary(display.show)
                   ? html`<div class="compact-summary">${item.summary ?? ''}</div>`
                   : nothing}
-                ${features.show_relative_time
-                  ? html`<div class="meta">${formatRelativeTime(
-                      item.published,
-                      this.hass.locale?.language,
-                    )}</div>`
-                  : nothing}
+                ${this._renderRelativeTime(item.published)}
               </div>
             </div>
           `,
@@ -464,7 +461,9 @@ export class HassRssCard extends LitElement {
   }
 
   private _renderCard(items: RssItem[], features: FeaturesConfig): TemplateResult {
-    const item = items[0];
+    const useIndex = this._usesArticleIndex(items, features, false);
+    const index = useIndex ? this._normalizeIndex(items) : 0;
+    const item = items[index] ?? items[0];
     void this._readVersion;
     const display = this._config.display ?? {};
     const imageCfg = display.image ?? {};
@@ -478,6 +477,10 @@ export class HassRssCard extends LitElement {
         ${showIncludesSummary(display.show)
           ? html`<div class="compact-summary">${item.summary ?? ''}</div>`
           : nothing}
+        ${item.feed_name
+          ? html`<div class="feed-name">${item.feed_name}</div>`
+          : nothing}
+        ${this._renderArticleNavigation(items, features, useIndex)}
       </div>
     `;
   }
@@ -548,6 +551,113 @@ export class HassRssCard extends LitElement {
     const duration = features.new_badge_duration ?? 3600;
     if (!isNewItem(item.published, duration, item.link)) return nothing;
     return html`<span class="new-badge">NEW</span>`;
+  }
+
+  private _getRelativeTimeLocale(): string | undefined {
+    const presetDir = resolveDirection(
+      this._config.rtl,
+      this._getItems()[0]?.title,
+    );
+    if (presetDir === 'rtl') {
+      return this.hass.locale?.language?.startsWith('he')
+        ? this.hass.locale.language
+        : 'he';
+    }
+    return this.hass.locale?.language;
+  }
+
+  private _renderRelativeTime(
+    published: string | undefined,
+  ): TemplateResult | typeof nothing {
+    if (this._config.features?.show_relative_time === false) {
+      return nothing;
+    }
+    const text = formatRelativeTime(published, this._getRelativeTimeLocale());
+    if (!text) {
+      return nothing;
+    }
+    return html`<span class="meta">${text}</span>`;
+  }
+
+  private _usesArticleIndex(
+    items: RssItem[],
+    features: FeaturesConfig,
+    carouselActive: boolean,
+  ): boolean {
+    if (items.length <= 1) {
+      return false;
+    }
+    const preset = this._config.display?.preset ?? 'compact';
+    if (preset === 'list' || preset === 'magazine') {
+      return false;
+    }
+    if (
+      preset === 'ticker' &&
+      this._config.animation?.enabled !== false &&
+      this._config.animation?.type === 'ticker'
+    ) {
+      return false;
+    }
+    return (
+      carouselActive || features.show_article_navigation !== false
+    );
+  }
+
+  private _normalizeIndex(items: RssItem[]): number {
+    if (items.length === 0) {
+      return 0;
+    }
+    return (
+      ((this._carouselIndex % items.length) + items.length) % items.length
+    );
+  }
+
+  private _renderArticleNavigation(
+    items: RssItem[],
+    features: FeaturesConfig,
+    enabled: boolean,
+  ): TemplateResult | typeof nothing {
+    if (!enabled || features.show_article_navigation === false) {
+      return nothing;
+    }
+
+    const index = this._normalizeIndex(items);
+    return html`
+      <div class="article-nav">
+        <button
+          class="nav-btn"
+          title="Previous article"
+          ?disabled=${items.length <= 1}
+          @click=${(event: Event) => {
+            event.stopPropagation();
+            this._goToArticle(-1, items.length);
+          }}
+        >
+          <ha-icon icon="mdi:chevron-left"></ha-icon>
+        </button>
+        <span class="article-nav-position">${index + 1}/${items.length}</span>
+        <button
+          class="nav-btn"
+          title="Next article"
+          ?disabled=${items.length <= 1}
+          @click=${(event: Event) => {
+            event.stopPropagation();
+            this._goToArticle(1, items.length);
+          }}
+        >
+          <ha-icon icon="mdi:chevron-right"></ha-icon>
+        </button>
+      </div>
+    `;
+  }
+
+  private _goToArticle(delta: number, count: number): void {
+    if (count <= 1) {
+      return;
+    }
+    this._carouselIndex = (this._carouselIndex + delta + count) % count;
+    this._tickerPaused = true;
+    this.requestUpdate();
   }
 
   private _getSourceOptions(): RssSourceOption[] {
@@ -643,12 +753,29 @@ export class HassRssCard extends LitElement {
   }
 
   private _openItem(item: RssItem): void {
+    const items = this._getItems();
+    const index = items.findIndex(
+      (entry) =>
+        (entry.link && entry.link === item.link) ||
+        (!entry.link && entry.title === item.title),
+    );
+
     if (this._config.features?.track_read_unread) {
       markRead(item.link);
       this._readVersion += 1;
     }
     if (item.link) {
       window.open(item.link, '_blank', 'noopener,noreferrer');
+    }
+
+    if (
+      this._config.features?.advance_on_read !== false &&
+      index >= 0 &&
+      items.length > 1
+    ) {
+      this._carouselIndex = (index + 1) % items.length;
+      this._tickerPaused = true;
+      this.requestUpdate();
     }
   }
 

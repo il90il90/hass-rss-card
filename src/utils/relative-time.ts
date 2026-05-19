@@ -9,7 +9,7 @@ export function formatRelativeTime(
 
   const diffSec = Math.round((ts - Date.now()) / 1000);
   const rtf = new Intl.RelativeTimeFormat(locale ?? undefined, {
-    numeric: 'auto',
+    numeric: 'always',
   });
 
   const abs = Math.abs(diffSec);

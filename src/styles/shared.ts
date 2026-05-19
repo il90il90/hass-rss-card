@@ -65,12 +65,6 @@ export const cardStyles = css`
     border-color: var(--primary-color);
   }
 
-  .last-updated {
-    font-size: 0.75em;
-    opacity: 0.6;
-    margin-bottom: 8px;
-  }
-
   .refresh-btn {
     cursor: pointer;
     opacity: 0.7;
@@ -144,6 +138,56 @@ export const cardStyles = css`
     opacity: 0.6;
     white-space: nowrap;
     flex-shrink: 0;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  .last-updated {
+    font-size: 0.75em;
+    opacity: 0.6;
+    margin-bottom: 8px;
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: end;
+  }
+
+  .article-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+    direction: ltr;
+  }
+
+  .nav-btn {
+    cursor: pointer;
+    opacity: 0.7;
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: var(--divider-color, rgba(0, 0, 0, 0.08));
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .article-nav-position {
+    font-size: 0.75em;
+    opacity: 0.6;
+    min-width: 3em;
+    text-align: center;
   }
 
   .feed-name {

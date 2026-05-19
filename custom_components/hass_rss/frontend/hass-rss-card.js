@@ -166,6 +166,8 @@ const DEFAULT_CONFIG = {
         show_refresh_button: true,
         show_source_selector: true,
         show_last_updated: true,
+        show_article_navigation: true,
+        advance_on_read: true,
         track_read_unread: true,
     },
     always_show_latest: true,
@@ -460,6 +462,8 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
             },
             { name: 'show_refresh_button', selector: { boolean: {} } },
             { name: 'show_source_selector', selector: { boolean: {} } },
+            { name: 'show_article_navigation', selector: { boolean: {} } },
+            { name: 'advance_on_read', selector: { boolean: {} } },
             { name: 'track_read_unread', selector: { boolean: {} } },
         ]}
           @value-changed=${(ev) => this._updateConfig('features', {
@@ -767,12 +771,6 @@ const cardStyles = i$4 `
     border-color: var(--primary-color);
   }
 
-  .last-updated {
-    font-size: 0.75em;
-    opacity: 0.6;
-    margin-bottom: 8px;
-  }
-
   .refresh-btn {
     cursor: pointer;
     opacity: 0.7;
@@ -846,6 +844,56 @@ const cardStyles = i$4 `
     opacity: 0.6;
     white-space: nowrap;
     flex-shrink: 0;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  .last-updated {
+    font-size: 0.75em;
+    opacity: 0.6;
+    margin-bottom: 8px;
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: end;
+  }
+
+  .article-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+    direction: ltr;
+  }
+
+  .nav-btn {
+    cursor: pointer;
+    opacity: 0.7;
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: var(--divider-color, rgba(0, 0, 0, 0.08));
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .article-nav-position {
+    font-size: 0.75em;
+    opacity: 0.6;
+    min-width: 3em;
+    text-align: center;
   }
 
   .feed-name {
@@ -1016,6 +1064,13 @@ const tickerStyles = i$4 `
     white-space: nowrap;
   }
 
+  .ticker-single .feed-name {
+    font-size: 0.7em;
+    opacity: 0.5;
+    text-align: end;
+    margin-top: 2px;
+  }
+
   @keyframes ticker-fade-in {
     from {
       opacity: 0;
@@ -1149,7 +1204,7 @@ function formatRelativeTime(published, locale) {
         return '';
     const diffSec = Math.round((ts - Date.now()) / 1000);
     const rtf = new Intl.RelativeTimeFormat(locale ?? undefined, {
-        numeric: 'auto',
+        numeric: 'always',
     });
     const abs = Math.abs(diffSec);
     if (abs < 60)
@@ -1249,7 +1304,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         dir=${dir}
       >
         ${this._renderHeader(features)}
-        ${this._renderLastUpdated(features)}
+        ${this._renderLastUpdated(features, dir)}
         ${items.length === 0
             ? this._renderEmpty()
             : this._renderPreset(preset, items, dir, features)}
@@ -1270,7 +1325,6 @@ let HassRssCard = class HassRssCard extends i$1 {
           ${showSelector
             ? b `
                 <label class="source-label">
-                  <ha-icon icon="mdi:rss"></ha-icon>
                   <select
                     class="source-select"
                     .value=${selection}
@@ -1285,10 +1339,7 @@ let HassRssCard = class HassRssCard extends i$1 {
                 </label>
               `
             : b `
-                <span class="header-title">
-                  <ha-icon icon="mdi:rss"></ha-icon>
-                  ${this._getSourceLabel(sources)}
-                </span>
+                <span class="header-title">${this._getSourceLabel(sources)}</span>
               `}
         </div>
         ${showRefresh
@@ -1308,7 +1359,7 @@ let HassRssCard = class HassRssCard extends i$1 {
       </div>
     `;
     }
-    _renderLastUpdated(features) {
+    _renderLastUpdated(features, dir) {
         if (features.show_last_updated === false) {
             return A;
         }
@@ -1316,7 +1367,12 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (!lastSuccess) {
             return A;
         }
-        const relative = formatRelativeTime(lastSuccess, this.hass.locale?.language);
+        const locale = dir === 'rtl'
+            ? this.hass.locale?.language?.startsWith('he')
+                ? this.hass.locale.language
+                : 'he'
+            : this.hass.locale?.language;
+        const relative = formatRelativeTime(lastSuccess, locale);
         if (!relative) {
             return A;
         }
@@ -1373,15 +1429,17 @@ let HassRssCard = class HassRssCard extends i$1 {
             animation.type === 'carousel' &&
             !prefersReducedMotion() &&
             items.length > 1;
-        if (useCarousel) {
-            const item = items[this._carouselIndex] ?? items[0];
+        const useIndex = this._usesArticleIndex(items, features, !!useCarousel);
+        const index = useIndex ? this._normalizeIndex(items) : 0;
+        const item = items[index] ?? items[0];
+        if (useCarousel || useIndex) {
             return b `
         <div class="carousel-container">
-          ${this._renderCompactItem(item, features, animation.transition)}
+          ${this._renderCompactItem(item, features, useCarousel ? animation.transition : undefined)}
+          ${this._renderArticleNavigation(items, features, useIndex)}
         </div>
       `;
         }
-        const item = items[0];
         return this._renderCompactItem(item, features);
     }
     _renderCompactItem(item, features, transition) {
@@ -1412,9 +1470,7 @@ let HassRssCard = class HassRssCard extends i$1 {
                 @click=${() => this._openItem(item)}
               >${item.title}</span>
             </div>
-            ${features.show_relative_time
-            ? b `<span class="meta">${formatRelativeTime(item.published, this.hass.locale?.language)}</span>`
-            : A}
+            ${this._renderRelativeTime(item.published)}
           </div>
           ${showIncludesSummary(display.show)
             ? b `<div class="compact-summary">${item.summary ?? ''}</div>`
@@ -1434,9 +1490,11 @@ let HassRssCard = class HassRssCard extends i$1 {
             !prefersReducedMotion() &&
             items.length > 1;
         if (useCarousel) {
-            const item = items[this._carouselIndex] ?? items[0];
+            const index = this._normalizeIndex(items);
+            const item = items[index] ?? items[0];
             const display = this._config.display ?? {};
             const transition = animation.transition ?? 'fade';
+            const useIndex = this._usesArticleIndex(items, features, true);
             return b `
         <div
           class="ticker-wrap ticker-single"
@@ -1451,17 +1509,19 @@ let HassRssCard = class HassRssCard extends i$1 {
         >
           <div
             class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
-            key=${`${this._carouselIndex}-${item.link}`}
+            key=${`${index}-${item.link}`}
           >
             ${this._renderImage(item, display, display.image ?? {}, 'small')}
             ${this._renderNewBadge(item, features)}
             <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
               ${item.title}
             </span>
-            ${features.show_relative_time
-                ? b `<span class="meta">${formatRelativeTime(item.published, this.hass.locale?.language)}</span>`
-                : A}
+            ${this._renderRelativeTime(item.published)}
           </div>
+          ${item.feed_name
+                ? b `<div class="feed-name">${item.feed_name}</div>`
+                : A}
+          ${this._renderArticleNavigation(items, features, useIndex)}
         </div>
       `;
         }
@@ -1521,9 +1581,7 @@ let HassRssCard = class HassRssCard extends i$1 {
                 ${showIncludesSummary(display.show)
             ? b `<div class="compact-summary">${item.summary ?? ''}</div>`
             : A}
-                ${features.show_relative_time
-            ? b `<div class="meta">${formatRelativeTime(item.published, this.hass.locale?.language)}</div>`
-            : A}
+                ${this._renderRelativeTime(item.published)}
               </div>
             </div>
           `)}
@@ -1531,7 +1589,9 @@ let HassRssCard = class HassRssCard extends i$1 {
     `;
     }
     _renderCard(items, features) {
-        const item = items[0];
+        const useIndex = this._usesArticleIndex(items, features, false);
+        const index = useIndex ? this._normalizeIndex(items) : 0;
+        const item = items[index] ?? items[0];
         void this._readVersion;
         const display = this._config.display ?? {};
         const imageCfg = display.image ?? {};
@@ -1545,6 +1605,10 @@ let HassRssCard = class HassRssCard extends i$1 {
         ${showIncludesSummary(display.show)
             ? b `<div class="compact-summary">${item.summary ?? ''}</div>`
             : A}
+        ${item.feed_name
+            ? b `<div class="feed-name">${item.feed_name}</div>`
+            : A}
+        ${this._renderArticleNavigation(items, features, useIndex)}
       </div>
     `;
     }
@@ -1603,6 +1667,87 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (!isNewItem(item.published, duration, item.link))
             return A;
         return b `<span class="new-badge">NEW</span>`;
+    }
+    _getRelativeTimeLocale() {
+        const presetDir = resolveDirection(this._config.rtl, this._getItems()[0]?.title);
+        if (presetDir === 'rtl') {
+            return this.hass.locale?.language?.startsWith('he')
+                ? this.hass.locale.language
+                : 'he';
+        }
+        return this.hass.locale?.language;
+    }
+    _renderRelativeTime(published) {
+        if (this._config.features?.show_relative_time === false) {
+            return A;
+        }
+        const text = formatRelativeTime(published, this._getRelativeTimeLocale());
+        if (!text) {
+            return A;
+        }
+        return b `<span class="meta">${text}</span>`;
+    }
+    _usesArticleIndex(items, features, carouselActive) {
+        if (items.length <= 1) {
+            return false;
+        }
+        const preset = this._config.display?.preset ?? 'compact';
+        if (preset === 'list' || preset === 'magazine') {
+            return false;
+        }
+        if (preset === 'ticker' &&
+            this._config.animation?.enabled !== false &&
+            this._config.animation?.type === 'ticker') {
+            return false;
+        }
+        return (carouselActive || features.show_article_navigation !== false);
+    }
+    _normalizeIndex(items) {
+        if (items.length === 0) {
+            return 0;
+        }
+        return (((this._carouselIndex % items.length) + items.length) % items.length);
+    }
+    _renderArticleNavigation(items, features, enabled) {
+        if (!enabled || features.show_article_navigation === false) {
+            return A;
+        }
+        const index = this._normalizeIndex(items);
+        return b `
+      <div class="article-nav">
+        <button
+          class="nav-btn"
+          title="Previous article"
+          ?disabled=${items.length <= 1}
+          @click=${(event) => {
+            event.stopPropagation();
+            this._goToArticle(-1, items.length);
+        }}
+        >
+          <ha-icon icon="mdi:chevron-left"></ha-icon>
+        </button>
+        <span class="article-nav-position">${index + 1}/${items.length}</span>
+        <button
+          class="nav-btn"
+          title="Next article"
+          ?disabled=${items.length <= 1}
+          @click=${(event) => {
+            event.stopPropagation();
+            this._goToArticle(1, items.length);
+        }}
+        >
+          <ha-icon icon="mdi:chevron-right"></ha-icon>
+        </button>
+      </div>
+    `;
+    }
+    _goToArticle(delta, count) {
+        if (count <= 1) {
+            return;
+        }
+        this._carouselIndex = (this._carouselIndex + delta + count) % count;
+        this._tickerPaused = true;
+        this.requestUpdate();
     }
     _getSourceOptions() {
         if (!this.hass) {
@@ -1675,12 +1820,22 @@ let HassRssCard = class HassRssCard extends i$1 {
         return mergeFeedItems(this.hass, this._getActiveFeeds(), maxItems);
     }
     _openItem(item) {
+        const items = this._getItems();
+        const index = items.findIndex((entry) => (entry.link && entry.link === item.link) ||
+            (!entry.link && entry.title === item.title));
         if (this._config.features?.track_read_unread) {
             markRead(item.link);
             this._readVersion += 1;
         }
         if (item.link) {
             window.open(item.link, '_blank', 'noopener,noreferrer');
+        }
+        if (this._config.features?.advance_on_read !== false &&
+            index >= 0 &&
+            items.length > 1) {
+            this._carouselIndex = (index + 1) % items.length;
+            this._tickerPaused = true;
+            this.requestUpdate();
         }
     }
     async _handleRefresh() {

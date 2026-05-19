@@ -9,5 +9,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/il90il90/hass-rss-card/issues",
   "requirements": ["feedparser>=6.0.0"],
-  "version": "1.0.12"
+  "version": "1.0.13"
 }

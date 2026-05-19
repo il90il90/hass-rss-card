@@ -106,6 +106,13 @@ export const tickerStyles = css`
     white-space: nowrap;
   }
 
+  .ticker-single .feed-name {
+    font-size: 0.7em;
+    opacity: 0.5;
+    text-align: end;
+    margin-top: 2px;
+  }
+
   @keyframes ticker-fade-in {
     from {
       opacity: 0;

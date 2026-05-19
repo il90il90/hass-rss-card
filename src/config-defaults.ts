@@ -54,6 +54,8 @@ export const DEFAULT_CONFIG: HassRssCardConfig = {
     show_refresh_button: true,
     show_source_selector: true,
     show_last_updated: true,
+    show_article_navigation: true,
+    advance_on_read: true,
     track_read_unread: true,
   },
   always_show_latest: true,

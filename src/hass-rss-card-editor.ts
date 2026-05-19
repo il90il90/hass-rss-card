@@ -319,6 +319,8 @@ export class HassRssCardEditor extends LitElement {
             },
             { name: 'show_refresh_button', selector: { boolean: {} } },
             { name: 'show_source_selector', selector: { boolean: {} } },
+            { name: 'show_article_navigation', selector: { boolean: {} } },
+            { name: 'advance_on_read', selector: { boolean: {} } },
             { name: 'track_read_unread', selector: { boolean: {} } },
           ]}
           @value-changed=${(ev: CustomEvent) =>
