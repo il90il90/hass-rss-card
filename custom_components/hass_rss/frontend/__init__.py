@@ -7,12 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA, MODE_STORAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
 
 from ..const import CARD_FILENAME, INTEGRATION_VERSION, URL_BASE
 
 _LOGGER = logging.getLogger(__name__)
+
+_LEGACY_LOCAL_URL = "/local/hass-rss-card.js"
+_RETRY_DELAY = 5
 
 
 async def async_register_card(hass: HomeAssistant) -> None:
@@ -30,14 +34,17 @@ async def async_register_card(hass: HomeAssistant) -> None:
     except RuntimeError:
         _LOGGER.debug("HASS RSS card path already registered")
 
-    lovelace = hass.data.get("lovelace")
-    if not lovelace:
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if not lovelace_data:
+        _LOGGER.debug("Lovelace not ready yet, retrying HASS RSS card registration")
+        async_call_later(
+            hass,
+            _RETRY_DELAY,
+            lambda _now: hass.async_create_task(async_register_card(hass)),
+        )
         return
 
-    resource_mode = getattr(
-        lovelace, "mode", getattr(lovelace, "resource_mode", "yaml")
-    )
-    if resource_mode != "storage":
+    if lovelace_data.resource_mode != MODE_STORAGE:
         _LOGGER.debug(
             "Lovelace YAML mode: add %s/%s as a module resource manually",
             URL_BASE,
@@ -46,22 +53,33 @@ async def async_register_card(hass: HomeAssistant) -> None:
         return
 
     async def _register_resource(_now: Any) -> None:
-        resources = lovelace.resources
-        if not resources.loaded:
-            async_call_later(hass, 5, _register_resource)
-            return
+        resources = lovelace_data.resources
+        if hasattr(resources, "_async_ensure_loaded"):
+            await resources._async_ensure_loaded()
 
         card_url = f"{URL_BASE}/{CARD_FILENAME}?v={INTEGRATION_VERSION}"
         base_url = f"{URL_BASE}/{CARD_FILENAME}"
+        rss_urls = {base_url, _LEGACY_LOCAL_URL}
 
-        for resource in resources.async_items():
-            if resource.get("url", "").split("?")[0] == base_url:
-                if INTEGRATION_VERSION not in resource.get("url", ""):
-                    await resources.async_update_item(
-                        resource["id"],
-                        {"res_type": "module", "url": card_url},
-                    )
-                return
+        canonical_id: str | None = None
+        for resource in list(resources.async_items()):
+            url = resource.get("url", "")
+            url_base = url.split("?")[0]
+            if url_base not in rss_urls and "hass-rss-card.js" not in url:
+                continue
+            if url_base == base_url and canonical_id is None:
+                canonical_id = resource["id"]
+                continue
+            await resources.async_delete_item(resource["id"])
+            _LOGGER.info("Removed stale HASS RSS Card resource: %s", url)
+
+        if canonical_id:
+            await resources.async_update_item(
+                canonical_id,
+                {"res_type": "module", "url": card_url},
+            )
+            _LOGGER.info("Updated HASS RSS Card resource to %s", card_url)
+            return
 
         await resources.async_create_item({"res_type": "module", "url": card_url})
         _LOGGER.info("Registered HASS RSS Card Lovelace resource")
