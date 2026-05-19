@@ -1,0 +1,12 @@
+refresh_feed:
+  fields:
+    entry_id:
+      example: "abc123"
+      selector:
+        text:
+    entity_id:
+      example: "sensor.hass_rss_news"
+      selector:
+        entity:
+          domain: sensor
+refresh_all:

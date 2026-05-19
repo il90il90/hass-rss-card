@@ -1,0 +1,31 @@
+"""Constants for the HASS RSS integration."""
+
+DOMAIN = "hass_rss"
+
+CONF_NAME = "name"
+CONF_URL = "url"
+CONF_REFRESH_INTERVAL = "refresh_interval"
+CONF_CATEGORY = "category"
+CONF_MAX_ITEMS = "max_items"
+CONF_ENABLE_NOTIFICATIONS = "enable_notifications"
+CONF_NOTIFY_SERVICE = "notify_service"
+
+DEFAULT_REFRESH_INTERVAL = 5
+DEFAULT_MAX_ITEMS = 20
+MIN_REFRESH_INTERVAL = 1
+MAX_REFRESH_INTERVAL = 1440
+
+SPEED_PRESETS = {
+    "slow": 30,
+    "medium": 50,
+    "fast": 80,
+}
+
+PLATFORMS = ["sensor"]
+
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; HASS-RSS/1.0; +https://github.com/hass-rss-card)"
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+}

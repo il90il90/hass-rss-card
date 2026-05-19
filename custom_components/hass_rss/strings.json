@@ -1,0 +1,95 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HASS RSS",
+        "description": "Choose how to add RSS feeds.",
+        "menu_options": {
+          "add_feed": "Add RSS feed",
+          "import_opml": "Import OPML"
+        }
+      },
+      "add_feed": {
+        "title": "Add RSS Feed",
+        "description": "Configure a new RSS feed source.",
+        "data": {
+          "name": "Name",
+          "url": "Feed URL",
+          "refresh_interval": "Refresh interval (minutes)",
+          "category": "Category / Channel",
+          "max_items": "Max items to store",
+          "enable_notifications": "Enable notifications"
+        },
+        "data_description": {
+          "category": "Optional label used to filter feeds in the card.",
+          "enable_notifications": "Send a notification when a new article is published."
+        }
+      },
+      "notifications": {
+        "title": "Notification settings",
+        "description": "Choose which notify service to use for new articles.",
+        "data": {
+          "notify_service": "Notify service"
+        }
+      },
+      "import_opml": {
+        "title": "Import OPML",
+        "description": "Paste OPML XML content to import multiple feeds at once.",
+        "data": {
+          "opml_content": "OPML content"
+        }
+      },
+      "opml_confirm": {
+        "title": "Confirm OPML import",
+        "description": "The following feeds will be imported. Duplicates are skipped.",
+        "data": {
+          "feeds": "Feeds to import"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to fetch the feed. Check the URL and try again.",
+      "invalid_feed": "The URL does not appear to be a valid RSS/Atom feed.",
+      "invalid_opml": "Invalid OPML content.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This feed URL is already configured.",
+      "opml_imported": "Imported {created} feed(s). Skipped {skipped} duplicate(s)."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure RSS Feed",
+        "data": {
+          "refresh_interval": "Refresh interval (minutes)",
+          "category": "Category / Channel",
+          "max_items": "Max items to store",
+          "enable_notifications": "Enable notifications",
+          "notify_service": "Notify service"
+        }
+      }
+    }
+  },
+  "services": {
+    "refresh_feed": {
+      "name": "Refresh feed",
+      "description": "Manually refresh a specific RSS feed.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry ID",
+          "description": "The config entry ID of the feed to refresh."
+        },
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "The sensor entity ID of the feed to refresh."
+        }
+      }
+    },
+    "refresh_all": {
+      "name": "Refresh all feeds",
+      "description": "Manually refresh all configured RSS feeds."
+    }
+  }
+}
