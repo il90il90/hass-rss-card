@@ -24,4 +24,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: hass-rss-card
-          path: dist/hass-rss-card.js
+          path: |
+            dist/hass-rss-card.js
+            custom_components/hass_rss/frontend/hass-rss-card.js

@@ -1,11 +1,11 @@
 {
   "name": "hass-rss-card",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Home Assistant RSS integration and Lovelace card",
   "type": "module",
   "main": "dist/hass-rss-card.js",
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c && node scripts/copy-card-to-integration.js",
     "watch": "rollup -c --watch",
     "lint": "eslint src --ext .ts"
   },

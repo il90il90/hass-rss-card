@@ -36,21 +36,22 @@ Then click **Add**.
 
 Or manually: **HACS → Integrations → search for "HASS RSS" → Download → Restart Home Assistant**.
 
-This installs:
+This installs the **HASS RSS** integration (`custom_components/hass_rss`), which **automatically registers the Lovelace card** — no manual resource step needed in most setups.
 
-- the **HASS RSS** integration (`custom_components/hass_rss`)
-- the **HASS RSS Card** JavaScript bundle (`dist/hass-rss-card.js`)
+### 3. Verify the card resource (usually automatic)
 
-### 3. Add the Lovelace resource
+After restart, the integration registers the card at `/hass_rss_card/hass-rss-card.js`.
 
-After restart, add the card resource if HACS did not add it automatically:
+Check **Settings → Dashboards → Resources** — you should see **HASS RSS Card** listed as a JavaScript Module.
 
-**Settings → Dashboards → Resources → Add Resource**
+If it is missing (for example in YAML Lovelace mode), add it manually:
 
 | Field | Value |
 |-------|-------|
-| URL | `/hacsfiles/hass-rss-card/hass-rss-card.js` |
+| URL | `/hass_rss_card/hass-rss-card.js` |
 | Resource type | **JavaScript Module** |
+
+> **Note:** Installing via HACS as **Integration** does not install the card separately. The card is bundled inside the integration and registered on startup.
 
 ### 4. Set up the integration
 
@@ -62,7 +63,14 @@ Choose **Add RSS feed** or **Import OPML**, fill in the feed details, and submit
 
 ### 5. Add the card to your dashboard
 
-**Dashboard → Edit → Add card → HASS RSS Card** (under Community cards).
+**Dashboard → Edit → Add card → search "RSS" → HASS RSS Card** (under Community cards).
+
+If the card does not appear:
+
+1. Confirm the integration is installed and Home Assistant was restarted
+2. Check **Settings → Dashboards → Resources** for `/hass_rss_card/hass-rss-card.js`
+3. Hard-refresh the browser or restart the Companion app to clear cached resources
+4. In YAML Lovelace mode, add the resource manually (see step 3 above)
 
 Use the Visual Editor to pick your RSS sensor entities and configure layout, animation, and features.
 
@@ -141,12 +149,8 @@ Because the card reads entity data instead of fetching RSS URLs directly, it wor
 Use this if you do not use HACS.
 
 1. Copy `custom_components/hass_rss` to your Home Assistant `config/custom_components/` directory.
-2. Copy `dist/hass-rss-card.js` to `config/www/hass-rss-card.js`.
-3. Add a Lovelace resource:
-   - URL: `/local/hass-rss-card.js`
-   - Type: **JavaScript Module**
-4. Restart Home Assistant.
-5. Add the integration via **Settings → Devices & Services → Add Integration → HASS RSS**.
+2. Restart Home Assistant — the card resource is registered automatically at `/hass_rss_card/hass-rss-card.js`.
+3. Add the integration via **Settings → Devices & Services → Add Integration → HASS RSS**.
 
 ---
 

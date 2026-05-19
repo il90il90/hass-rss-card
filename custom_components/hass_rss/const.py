@@ -1,6 +1,17 @@
 """Constants for the HASS RSS integration."""
 
+import json
+from pathlib import Path
+from typing import Final
+
+MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+with open(MANIFEST_PATH, encoding="utf-8") as manifest_file:
+    INTEGRATION_VERSION: Final[str] = json.load(manifest_file).get("version", "1.0.0")
+
 DOMAIN = "hass_rss"
+
+URL_BASE: Final[str] = "/hass_rss_card"
+CARD_FILENAME: Final[str] = "hass-rss-card.js"
 
 CONF_NAME = "name"
 CONF_URL = "url"

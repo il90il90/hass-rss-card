@@ -49,9 +49,6 @@ export class HassRssCard extends LitElement {
     const feeds = (config.feeds ?? []).filter(
       (feed) => feed.entity && feed.entity.trim().length > 0,
     );
-    if (!feeds.length) {
-      throw new Error('Configure at least one feed entity');
-    }
     this._config = mergeConfig({ ...config, feeds });
     this._applyPresetDefaults();
   }
@@ -120,9 +117,11 @@ export class HassRssCard extends LitElement {
   }
 
   private _renderEmpty(): TemplateResult {
-    const hasMissing = (this._config.feeds ?? []).some(
-      (f) => !this.hass.states[f.entity],
-    );
+    const feeds = this._config.feeds ?? [];
+    if (feeds.length === 0) {
+      return html`<div class="empty">Add RSS feed entities in the card editor.</div>`;
+    }
+    const hasMissing = feeds.some((f) => !this.hass.states[f.entity]);
     if (hasMissing) {
       return html`<div class="error">One or more feed entities are unavailable.</div>`;
     }
@@ -520,7 +519,7 @@ declare global {
   description: 'Display RSS feeds from the HASS RSS integration',
   preview: true,
   documentationURL:
-    'https://github.com/your-org/hass-rss-card#readme',
+    'https://github.com/il90il90/hass-rss-card#readme',
 });
 
 interface CustomCardsWindow extends Window {

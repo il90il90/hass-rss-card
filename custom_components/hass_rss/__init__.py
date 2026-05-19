@@ -8,7 +8,8 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .const import (
@@ -21,6 +22,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import HassRssCoordinator
+from .frontend import async_register_card
 from .notify import maybe_notify_new_item
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,7 +108,15 @@ def _get_merged_config(entry: ConfigEntry) -> dict[str, Any]:
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up HASS RSS services."""
+    """Set up HASS RSS services and register the Lovelace card."""
+
+    async def _register_frontend(_event=None) -> None:
+        await async_register_card(hass)
+
+    if hass.state == CoreState.running:
+        await _register_frontend()
+    else:
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_frontend)
 
     async def refresh_feed(call: ServiceCall) -> None:
         entry_id = call.data.get("entry_id")

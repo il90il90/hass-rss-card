@@ -13,6 +13,6 @@ RSS feed integration and Lovelace card for Home Assistant — one repository, on
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=il90il90&repository=hass-rss-card&category=integration)
 
-Add as a custom repository in HACS (category: **Integration**), download, restart, then set up via **Settings → Devices & Services → Add Integration → HASS RSS**.
+Add as a custom repository in HACS (category: **Integration**), download, restart. The card is bundled with the integration and registered automatically.
 
 See [README.md](README.md) for full documentation.
