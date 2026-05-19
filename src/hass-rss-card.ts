@@ -10,6 +10,7 @@ import { tickerStyles } from './styles/ticker';
 import type {
   AnimationConfig,
   DisplayConfig,
+  DisplayPreset,
   FeaturesConfig,
   FeedConfig,
   HassRssCardConfig,
@@ -33,6 +34,7 @@ import {
   type RssSourceOption,
 } from './utils/rss-entities';
 import { canEmbedArticleUrl } from './utils/article-open';
+import { resolvePresetDisplay } from './utils/preset-display';
 import { prefersReducedMotion, resolveDirection } from './utils/rtl';
 
 @customElement('hass-rss-card')
@@ -121,12 +123,15 @@ export class HassRssCard extends LitElement {
       this._config.rtl,
       items[0]?.title,
     );
-    const preset = this._config.display?.preset ?? 'compact';
+    const preset = this._getPreset();
     const features = this._config.features ?? {};
 
     return html`
       <ha-card
-        class=${classMap({ loading: this._refreshing })}
+        class=${classMap({
+          loading: this._refreshing,
+          [`preset-${preset}`]: true,
+        })}
         dir=${dir}
       >
         ${this._renderHeader(features)}
@@ -278,6 +283,38 @@ export class HassRssCard extends LitElement {
     }
   }
 
+  private _getPreset(): DisplayPreset {
+    return this._config.display?.preset ?? 'compact';
+  }
+
+  private _getDisplay(): DisplayConfig {
+    return resolvePresetDisplay(this._getPreset(), this._config.display);
+  }
+
+  private _renderCarouselShell(
+    content: TemplateResult,
+    items: RssItem[],
+    features: FeaturesConfig,
+    useIndex: boolean,
+  ): TemplateResult {
+    return html`
+      <div
+        class="carousel-container"
+        @mouseenter=${() => {
+          if ((this._config.animation?.pause_on_hover ?? true) !== false) {
+            this._carouselHoverPaused = true;
+          }
+        }}
+        @mouseleave=${() => {
+          this._carouselHoverPaused = false;
+        }}
+      >
+        ${content}
+        ${this._renderArticleNavigation(items, features, useIndex)}
+      </div>
+    `;
+  }
+
   private _renderCompact(items: RssItem[], features: FeaturesConfig): TemplateResult {
     const animation = this._config.animation ?? {};
     const useCarousel =
@@ -288,31 +325,17 @@ export class HassRssCard extends LitElement {
     const useIndex = this._usesArticleIndex(items, features, !!useCarousel);
     const index = useIndex ? this._normalizeIndex(items) : 0;
     const item = items[index] ?? items[0];
+    const content = this._renderCompactItem(
+      item,
+      features,
+      useCarousel ? animation.transition : undefined,
+    );
 
     if (useCarousel || useIndex) {
-      return html`
-        <div
-          class="carousel-container"
-          @mouseenter=${() => {
-            if ((this._config.animation?.pause_on_hover ?? true) !== false) {
-              this._carouselHoverPaused = true;
-            }
-          }}
-          @mouseleave=${() => {
-            this._carouselHoverPaused = false;
-          }}
-        >
-          ${this._renderCompactItem(
-            item,
-            features,
-            useCarousel ? animation.transition : undefined,
-          )}
-          ${this._renderArticleNavigation(items, features, useIndex)}
-        </div>
-      `;
+      return this._renderCarouselShell(content, items, features, useIndex);
     }
 
-    return this._renderCompactItem(item, features);
+    return content;
   }
 
   private _renderCompactItem(
@@ -321,7 +344,7 @@ export class HassRssCard extends LitElement {
     transition?: string,
   ): TemplateResult {
     void this._readVersion;
-    const display = this._config.display ?? {};
+    const display = this._getDisplay();
     const imageCfg = display.image ?? {};
     const position = imageCfg.position ?? 'start';
     const read = !!(features.track_read_unread && isRead(item.link));
@@ -378,21 +401,13 @@ export class HassRssCard extends LitElement {
     if (useCarousel) {
       const index = this._normalizeIndex(items);
       const item = items[index] ?? items[0];
-      const display = this._config.display ?? {};
+      const display = this._getDisplay();
       const transition = animation.transition ?? 'fade';
       const useIndex = this._usesArticleIndex(items, features, true);
-      return html`
+      const content = html`
         <div
           class="ticker-wrap ticker-single"
           dir=${dir}
-          @mouseenter=${() => {
-            if (animation.pause_on_hover !== false) {
-              this._carouselHoverPaused = true;
-            }
-          }}
-          @mouseleave=${() => {
-            this._carouselHoverPaused = false;
-          }}
         >
           <div
             class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
@@ -405,24 +420,23 @@ export class HassRssCard extends LitElement {
             </span>
             ${this._renderRelativeTime(item.published)}
           </div>
-          ${item.feed_name
-            ? html`<div class="feed-name">${item.feed_name}</div>`
-            : nothing}
-          ${this._renderArticleNavigation(items, features, useIndex)}
+          ${this._renderArticleMeta(item, features, false)}
         </div>
       `;
+      return this._renderCarouselShell(content, items, features, useIndex);
     }
 
     const enabled =
       animation.enabled !== false && !prefersReducedMotion();
     const speed = this._resolveSpeed(animation);
     const duration = this._estimateTickerDuration(items.length, speed);
-    const display = this._config.display ?? {};
+    const display = this._getDisplay();
     const doubled = enabled ? [...items, ...items] : items;
 
     return html`
       <div
-        class="ticker-wrap"
+        class="ticker-wrap ticker-scroll"
+        dir=${dir}
         @mouseenter=${() => {
           if (animation.pause_on_hover) this._tickerPaused = true;
         }}
@@ -446,6 +460,7 @@ export class HassRssCard extends LitElement {
                 <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
                   ${item.title}
                 </span>
+                ${this._renderRelativeTime(item.published)}
                 ${i < doubled.length - 1
                   ? html`<span class="ticker-separator">•</span>`
                   : nothing}
@@ -459,22 +474,25 @@ export class HassRssCard extends LitElement {
 
   private _renderList(items: RssItem[], features: FeaturesConfig): TemplateResult {
     void this._readVersion;
-    const display = this._config.display ?? {};
+    const display = this._getDisplay();
     return html`
       <div class="list-items">
         ${items.map(
           (item) => html`
             <div class="list-item item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
               ${this._renderImage(item, display, display.image ?? {})}
-              <div class="compact-content">
-                <div class="compact-title">
-                  ${this._renderNewBadge(item, features)}
-                  <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+              <div class="list-content">
+                <div class="list-row">
+                  <div class="list-title">
+                    ${this._renderNewBadge(item, features)}
+                    <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+                  </div>
+                  ${this._renderRelativeTime(item.published)}
                 </div>
                 ${showIncludesSummary(display.show)
-                  ? html`<div class="compact-summary">${item.summary ?? ''}</div>`
+                  ? html`<div class="list-summary">${item.summary ?? ''}</div>`
                   : nothing}
-                ${this._renderRelativeTime(item.published)}
+                ${this._renderArticleMeta(item, features, false)}
               </div>
             </div>
           `,
@@ -488,31 +506,42 @@ export class HassRssCard extends LitElement {
     const index = useIndex ? this._normalizeIndex(items) : 0;
     const item = items[index] ?? items[0];
     void this._readVersion;
-    const display = this._config.display ?? {};
+    const display = this._getDisplay();
     const imageCfg = display.image ?? {};
-    return html`
-      <div class="card-item image-top item">
+    const content = html`
+      <div class="card-item image-top item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
         ${this._renderImage(item, display, { ...imageCfg, position: 'top' }, 'large')}
-        <div class="compact-title">
-          ${this._renderNewBadge(item, features)}
-          <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+        <div class="card-body">
+          <div class="card-row">
+            <div class="card-title">
+              ${this._renderNewBadge(item, features)}
+              <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+            </div>
+            ${this._renderRelativeTime(item.published)}
+          </div>
+          ${showIncludesSummary(display.show)
+            ? html`<div class="card-summary">${item.summary ?? ''}</div>`
+            : nothing}
+          ${this._renderArticleMeta(item, features, false)}
         </div>
-        ${showIncludesSummary(display.show)
-          ? html`<div class="compact-summary">${item.summary ?? ''}</div>`
-          : nothing}
-        ${item.feed_name
-          ? html`<div class="feed-name">${item.feed_name}</div>`
-          : nothing}
-        ${this._renderArticleNavigation(items, features, useIndex)}
       </div>
     `;
+
+    if (useIndex) {
+      return this._renderCarouselShell(content, items, features, useIndex);
+    }
+
+    return content;
   }
 
   private _renderMagazine(items: RssItem[], features: FeaturesConfig): TemplateResult {
-    const item = items[0];
+    const useIndex = this._usesArticleIndex(items, features, false);
+    const index = useIndex ? this._normalizeIndex(items) : 0;
+    const item = items[index] ?? items[0];
     void this._readVersion;
-    return html`
-      <div class="magazine-item item">
+    const display = this._getDisplay();
+    const content = html`
+      <div class="magazine-item item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
         ${item.image && item.has_image
           ? html`<img
               class="magazine-bg"
@@ -521,15 +550,30 @@ export class HassRssCard extends LitElement {
               loading="lazy"
               @error=${(e: Event) => this._hideImage(e)}
             />`
-          : html`<div class="magazine-bg" style="background: var(--primary-color); opacity: 0.3;"></div>`}
+          : html`<div class="magazine-bg magazine-placeholder"></div>`}
         <div class="magazine-overlay">
           ${this._renderNewBadge(item, features)}
           <div class="magazine-title item-link" @click=${() => this._openItem(item)}>
             ${item.title}
           </div>
+          ${showIncludesSummary(display.show)
+            ? html`<div class="magazine-summary">${item.summary ?? ''}</div>`
+            : nothing}
+          <div class="magazine-meta">
+            ${this._renderRelativeTime(item.published)}
+            ${item.feed_name
+              ? html`<span class="feed-name">${item.feed_name}</span>`
+              : nothing}
+          </div>
         </div>
       </div>
     `;
+
+    if (useIndex) {
+      return this._renderCarouselShell(content, items, features, useIndex);
+    }
+
+    return content;
   }
 
   private _renderImage(
@@ -602,6 +646,26 @@ export class HassRssCard extends LitElement {
     return html`<span class="meta">${text}</span>`;
   }
 
+  private _renderArticleMeta(
+    item: RssItem,
+    _features: FeaturesConfig,
+    includePublished = true,
+  ): TemplateResult | typeof nothing {
+    const showTime =
+      includePublished && this._config.features?.show_relative_time !== false;
+    const showFeed = !!item.feed_name;
+    if (!showTime && !showFeed) {
+      return nothing;
+    }
+
+    return html`
+      <div class="article-meta">
+        ${showTime ? this._renderRelativeTime(item.published) : nothing}
+        ${showFeed ? html`<span class="feed-name">${item.feed_name}</span>` : nothing}
+      </div>
+    `;
+  }
+
   private _usesArticleIndex(
     items: RssItem[],
     features: FeaturesConfig,
@@ -610,8 +674,8 @@ export class HassRssCard extends LitElement {
     if (items.length <= 1) {
       return false;
     }
-    const preset = this._config.display?.preset ?? 'compact';
-    if (preset === 'list' || preset === 'magazine') {
+    const preset = this._getPreset();
+    if (preset === 'list') {
       return false;
     }
     if (
@@ -770,7 +834,8 @@ export class HassRssCard extends LitElement {
   }
 
   private _getItems(): RssItem[] {
-    const maxItems = this._config.display?.max_items ?? 5;
+    const display = this._getDisplay();
+    const maxItems = display.max_items ?? 5;
     return mergeFeedItems(this.hass, this._getActiveFeeds(), maxItems);
   }
 
@@ -1025,8 +1090,8 @@ export class HassRssCard extends LitElement {
       return false;
     }
 
-    const preset = this._config?.display?.preset ?? 'compact';
-    if (preset === 'list' || preset === 'magazine') {
+    const preset = this._getPreset();
+    if (preset === 'list') {
       return false;
     }
 
@@ -1059,7 +1124,7 @@ export class HassRssCard extends LitElement {
   }
 
   private _applyPresetDefaults(): void {
-    const preset = this._config.display?.preset;
+    const preset = this._getPreset();
     if (!this._config.animation) this._config.animation = {};
 
     if (preset === 'ticker') {
@@ -1075,6 +1140,17 @@ export class HassRssCard extends LitElement {
       if (this._config.animation.auto_advance === undefined) {
         this._config.animation.auto_advance = true;
       }
+    }
+
+    if (preset === 'list' && this._config.animation.auto_advance === undefined) {
+      this._config.animation.auto_advance = false;
+    }
+
+    if (
+      (preset === 'card' || preset === 'magazine') &&
+      this._config.animation.auto_advance === undefined
+    ) {
+      this._config.animation.auto_advance = true;
     }
   }
 

@@ -147,6 +147,11 @@ async def main() -> None:
             "customCards",
             "refresh_all",
             "ticker-single",
+            "list-items",
+            "card-item",
+            "magazine-item",
+            "last-updated",
+            "preset-",
         ):
             record(results, f"Card JS contains '{check}'", check in js, "")
 
@@ -274,6 +279,22 @@ async def main() -> None:
                     f"{sensor['entity_id']} state matches newest article",
                     sensor.get("state") == items[0].get("title"),
                     f"state={sensor.get('state', '')[:50]}",
+                )
+                published_count = sum(
+                    1 for item in items if item.get("published")
+                )
+                record(
+                    results,
+                    f"{sensor['entity_id']} articles have published timestamps",
+                    published_count == len(items),
+                    f"{published_count}/{len(items)} with published",
+                )
+                last_success = sensor.get("attributes", {}).get("last_success")
+                record(
+                    results,
+                    f"{sensor['entity_id']} has last_success timestamp",
+                    bool(last_success),
+                    str(last_success)[:40] if last_success else "",
                 )
             merged_items.extend(items)
 

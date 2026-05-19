@@ -659,36 +659,30 @@ const compactStyles = i$4 `
     transform: translateX(20px);
   }
 
-  .carousel-dots {
+  .article-meta {
     display: flex;
-    justify-content: center;
-    gap: 4px;
-    margin-top: 8px;
-  }
-
-  .carousel-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--divider-color, rgba(0, 0, 0, 0.2));
-  }
-
-  .carousel-dot.active {
-    background: var(--primary-color);
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
   }
 
   .list-items {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
   }
 
   .list-item {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    padding-bottom: 12px;
+    padding: 12px 0;
     border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+  }
+
+  .list-item:first-child {
+    padding-top: 0;
   }
 
   .list-item:last-child {
@@ -696,47 +690,166 @@ const compactStyles = i$4 `
     padding-bottom: 0;
   }
 
+  .list-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .list-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .list-title {
+    font-size: 0.95em;
+    font-weight: 500;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .list-summary {
+    font-size: 0.82em;
+    opacity: 0.72;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .card-item {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+    background: var(--secondary-background-color, rgba(0, 0, 0, 0.02));
   }
 
   .card-item.image-top .item-image,
   .card-item.image-top .placeholder-image {
     width: 100%;
-    height: 160px;
+    height: 180px;
+    border-radius: 0;
+  }
+
+  .card-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .card-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .card-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card-summary {
+    font-size: 0.88em;
+    opacity: 0.78;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .magazine-item {
     position: relative;
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
-    min-height: 180px;
+    min-height: 220px;
+    margin-top: 4px;
   }
 
   .magazine-bg {
     width: 100%;
-    height: 180px;
+    height: 220px;
     object-fit: cover;
     display: block;
+  }
+
+  .magazine-placeholder {
+    background: linear-gradient(
+      135deg,
+      var(--primary-color) 0%,
+      rgba(0, 0, 0, 0.45) 100%
+    );
+    opacity: 0.55;
   }
 
   .magazine-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(transparent 30%, rgba(0, 0, 0, 0.75));
+    background: linear-gradient(transparent 20%, rgba(0, 0, 0, 0.82));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    padding: 16px;
+    padding: 18px;
     color: #fff;
+    gap: 6px;
   }
 
   .magazine-title {
-    font-size: 1.1em;
-    font-weight: 600;
+    font-size: 1.15em;
+    font-weight: 700;
     line-height: 1.3;
+  }
+
+  .magazine-summary {
+    font-size: 0.85em;
+    opacity: 0.9;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .magazine-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .magazine-meta .meta,
+  .magazine-meta .feed-name {
+    color: rgba(255, 255, 255, 0.85);
+    opacity: 1;
+  }
+
+  ha-card.preset-list {
+    padding-top: 8px;
+  }
+
+  ha-card.preset-card {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  ha-card.preset-magazine {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  ha-card.preset-ticker .ticker-wrap {
+    margin-top: 2px;
   }
 `;
 
@@ -1343,6 +1456,56 @@ function canEmbedArticleUrl(url) {
     }
 }
 
+const PRESET_DISPLAY = {
+    compact: {},
+    ticker: {
+        max_items: 5,
+    },
+    card: {
+        show: 'title_image_summary',
+        max_items: 5,
+        image: {
+            position: 'top',
+            size: 'large',
+            fit: 'cover',
+            fallback: 'placeholder',
+        },
+    },
+    list: {
+        show: 'title_image',
+        max_items: 10,
+        image: {
+            position: 'start',
+            size: 'medium',
+            fit: 'cover',
+            fallback: 'none',
+        },
+    },
+    magazine: {
+        show: 'title_image',
+        max_items: 5,
+        image: {
+            position: 'top',
+            size: 'large',
+            fit: 'cover',
+            fallback: 'none',
+        },
+    },
+};
+function resolvePresetDisplay(preset, display = {}) {
+    const defaults = PRESET_DISPLAY[preset] ?? {};
+    return {
+        ...display,
+        show: display.show ?? defaults.show,
+        max_items: display.max_items ?? defaults.max_items,
+        image: {
+            ...defaults.image,
+            ...display.image,
+            ...(preset === 'card' ? { position: 'top' } : {}),
+        },
+    };
+}
+
 const RTL_CHAR_RE = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 function detectRtlFromText(text) {
     return RTL_CHAR_RE.test(text);
@@ -1423,11 +1586,14 @@ let HassRssCard = class HassRssCard extends i$1 {
             return b ``;
         const items = this._getItems();
         const dir = resolveDirection(this._config.rtl, items[0]?.title);
-        const preset = this._config.display?.preset ?? 'compact';
+        const preset = this._getPreset();
         const features = this._config.features ?? {};
         return b `
       <ha-card
-        class=${e({ loading: this._refreshing })}
+        class=${e({
+            loading: this._refreshing,
+            [`preset-${preset}`]: true,
+        })}
         dir=${dir}
       >
         ${this._renderHeader(features)}
@@ -1551,6 +1717,30 @@ let HassRssCard = class HassRssCard extends i$1 {
                 return this._renderCompact(items, features);
         }
     }
+    _getPreset() {
+        return this._config.display?.preset ?? 'compact';
+    }
+    _getDisplay() {
+        return resolvePresetDisplay(this._getPreset(), this._config.display);
+    }
+    _renderCarouselShell(content, items, features, useIndex) {
+        return b `
+      <div
+        class="carousel-container"
+        @mouseenter=${() => {
+            if ((this._config.animation?.pause_on_hover ?? true) !== false) {
+                this._carouselHoverPaused = true;
+            }
+        }}
+        @mouseleave=${() => {
+            this._carouselHoverPaused = false;
+        }}
+      >
+        ${content}
+        ${this._renderArticleNavigation(items, features, useIndex)}
+      </div>
+    `;
+    }
     _renderCompact(items, features) {
         const animation = this._config.animation ?? {};
         const useCarousel = animation.enabled &&
@@ -1560,29 +1750,15 @@ let HassRssCard = class HassRssCard extends i$1 {
         const useIndex = this._usesArticleIndex(items, features, !!useCarousel);
         const index = useIndex ? this._normalizeIndex(items) : 0;
         const item = items[index] ?? items[0];
+        const content = this._renderCompactItem(item, features, useCarousel ? animation.transition : undefined);
         if (useCarousel || useIndex) {
-            return b `
-        <div
-          class="carousel-container"
-          @mouseenter=${() => {
-                if ((this._config.animation?.pause_on_hover ?? true) !== false) {
-                    this._carouselHoverPaused = true;
-                }
-            }}
-          @mouseleave=${() => {
-                this._carouselHoverPaused = false;
-            }}
-        >
-          ${this._renderCompactItem(item, features, useCarousel ? animation.transition : undefined)}
-          ${this._renderArticleNavigation(items, features, useIndex)}
-        </div>
-      `;
+            return this._renderCarouselShell(content, items, features, useIndex);
         }
-        return this._renderCompactItem(item, features);
+        return content;
     }
     _renderCompactItem(item, features, transition) {
         void this._readVersion;
-        const display = this._config.display ?? {};
+        const display = this._getDisplay();
         const imageCfg = display.image ?? {};
         const position = imageCfg.position ?? 'start';
         const read = !!(features.track_read_unread && isRead(item.link));
@@ -1630,21 +1806,13 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (useCarousel) {
             const index = this._normalizeIndex(items);
             const item = items[index] ?? items[0];
-            const display = this._config.display ?? {};
+            const display = this._getDisplay();
             const transition = animation.transition ?? 'fade';
             const useIndex = this._usesArticleIndex(items, features, true);
-            return b `
+            const content = b `
         <div
           class="ticker-wrap ticker-single"
           dir=${dir}
-          @mouseenter=${() => {
-                if (animation.pause_on_hover !== false) {
-                    this._carouselHoverPaused = true;
-                }
-            }}
-          @mouseleave=${() => {
-                this._carouselHoverPaused = false;
-            }}
         >
           <div
             class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
@@ -1657,21 +1825,20 @@ let HassRssCard = class HassRssCard extends i$1 {
             </span>
             ${this._renderRelativeTime(item.published)}
           </div>
-          ${item.feed_name
-                ? b `<div class="feed-name">${item.feed_name}</div>`
-                : A}
-          ${this._renderArticleNavigation(items, features, useIndex)}
+          ${this._renderArticleMeta(item, features, false)}
         </div>
       `;
+            return this._renderCarouselShell(content, items, features, useIndex);
         }
         const enabled = animation.enabled !== false && !prefersReducedMotion();
         const speed = this._resolveSpeed(animation);
         const duration = this._estimateTickerDuration(items.length, speed);
-        const display = this._config.display ?? {};
+        const display = this._getDisplay();
         const doubled = enabled ? [...items, ...items] : items;
         return b `
       <div
-        class="ticker-wrap"
+        class="ticker-wrap ticker-scroll"
+        dir=${dir}
         @mouseenter=${() => {
             if (animation.pause_on_hover)
                 this._tickerPaused = true;
@@ -1695,6 +1862,7 @@ let HassRssCard = class HassRssCard extends i$1 {
                 <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
                   ${item.title}
                 </span>
+                ${this._renderRelativeTime(item.published)}
                 ${i < doubled.length - 1
             ? b `<span class="ticker-separator">•</span>`
             : A}
@@ -1706,21 +1874,24 @@ let HassRssCard = class HassRssCard extends i$1 {
     }
     _renderList(items, features) {
         void this._readVersion;
-        const display = this._config.display ?? {};
+        const display = this._getDisplay();
         return b `
       <div class="list-items">
         ${items.map((item) => b `
             <div class="list-item item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
               ${this._renderImage(item, display, display.image ?? {})}
-              <div class="compact-content">
-                <div class="compact-title">
-                  ${this._renderNewBadge(item, features)}
-                  <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+              <div class="list-content">
+                <div class="list-row">
+                  <div class="list-title">
+                    ${this._renderNewBadge(item, features)}
+                    <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+                  </div>
+                  ${this._renderRelativeTime(item.published)}
                 </div>
                 ${showIncludesSummary(display.show)
-            ? b `<div class="compact-summary">${item.summary ?? ''}</div>`
+            ? b `<div class="list-summary">${item.summary ?? ''}</div>`
             : A}
-                ${this._renderRelativeTime(item.published)}
+                ${this._renderArticleMeta(item, features, false)}
               </div>
             </div>
           `)}
@@ -1732,30 +1903,39 @@ let HassRssCard = class HassRssCard extends i$1 {
         const index = useIndex ? this._normalizeIndex(items) : 0;
         const item = items[index] ?? items[0];
         void this._readVersion;
-        const display = this._config.display ?? {};
+        const display = this._getDisplay();
         const imageCfg = display.image ?? {};
-        return b `
-      <div class="card-item image-top item">
+        const content = b `
+      <div class="card-item image-top item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
         ${this._renderImage(item, display, { ...imageCfg, position: 'top' }, 'large')}
-        <div class="compact-title">
-          ${this._renderNewBadge(item, features)}
-          <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+        <div class="card-body">
+          <div class="card-row">
+            <div class="card-title">
+              ${this._renderNewBadge(item, features)}
+              <span class="item-link" @click=${() => this._openItem(item)}>${item.title}</span>
+            </div>
+            ${this._renderRelativeTime(item.published)}
+          </div>
+          ${showIncludesSummary(display.show)
+            ? b `<div class="card-summary">${item.summary ?? ''}</div>`
+            : A}
+          ${this._renderArticleMeta(item, features, false)}
         </div>
-        ${showIncludesSummary(display.show)
-            ? b `<div class="compact-summary">${item.summary ?? ''}</div>`
-            : A}
-        ${item.feed_name
-            ? b `<div class="feed-name">${item.feed_name}</div>`
-            : A}
-        ${this._renderArticleNavigation(items, features, useIndex)}
       </div>
     `;
+        if (useIndex) {
+            return this._renderCarouselShell(content, items, features, useIndex);
+        }
+        return content;
     }
     _renderMagazine(items, features) {
-        const item = items[0];
+        const useIndex = this._usesArticleIndex(items, features, false);
+        const index = useIndex ? this._normalizeIndex(items) : 0;
+        const item = items[index] ?? items[0];
         void this._readVersion;
-        return b `
-      <div class="magazine-item item">
+        const display = this._getDisplay();
+        const content = b `
+      <div class="magazine-item item ${features.track_read_unread && isRead(item.link) ? 'read' : ''}">
         ${item.image && item.has_image
             ? b `<img
               class="magazine-bg"
@@ -1764,15 +1944,28 @@ let HassRssCard = class HassRssCard extends i$1 {
               loading="lazy"
               @error=${(e) => this._hideImage(e)}
             />`
-            : b `<div class="magazine-bg" style="background: var(--primary-color); opacity: 0.3;"></div>`}
+            : b `<div class="magazine-bg magazine-placeholder"></div>`}
         <div class="magazine-overlay">
           ${this._renderNewBadge(item, features)}
           <div class="magazine-title item-link" @click=${() => this._openItem(item)}>
             ${item.title}
           </div>
+          ${showIncludesSummary(display.show)
+            ? b `<div class="magazine-summary">${item.summary ?? ''}</div>`
+            : A}
+          <div class="magazine-meta">
+            ${this._renderRelativeTime(item.published)}
+            ${item.feed_name
+            ? b `<span class="feed-name">${item.feed_name}</span>`
+            : A}
+          </div>
         </div>
       </div>
     `;
+        if (useIndex) {
+            return this._renderCarouselShell(content, items, features, useIndex);
+        }
+        return content;
     }
     _renderImage(item, display, imageCfg, sizeOverride) {
         if (!showIncludesImage(display.show))
@@ -1826,12 +2019,25 @@ let HassRssCard = class HassRssCard extends i$1 {
         }
         return b `<span class="meta">${text}</span>`;
     }
+    _renderArticleMeta(item, _features, includePublished = true) {
+        const showTime = includePublished && this._config.features?.show_relative_time !== false;
+        const showFeed = !!item.feed_name;
+        if (!showTime && !showFeed) {
+            return A;
+        }
+        return b `
+      <div class="article-meta">
+        ${showTime ? this._renderRelativeTime(item.published) : A}
+        ${showFeed ? b `<span class="feed-name">${item.feed_name}</span>` : A}
+      </div>
+    `;
+    }
     _usesArticleIndex(items, features, carouselActive) {
         if (items.length <= 1) {
             return false;
         }
-        const preset = this._config.display?.preset ?? 'compact';
-        if (preset === 'list' || preset === 'magazine') {
+        const preset = this._getPreset();
+        if (preset === 'list') {
             return false;
         }
         if (preset === 'ticker' &&
@@ -1954,7 +2160,8 @@ let HassRssCard = class HassRssCard extends i$1 {
         }));
     }
     _getItems() {
-        const maxItems = this._config.display?.max_items ?? 5;
+        const display = this._getDisplay();
+        const maxItems = display.max_items ?? 5;
         return mergeFeedItems(this.hass, this._getActiveFeeds(), maxItems);
     }
     _openItem(item) {
@@ -2154,8 +2361,8 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (this._getItems().length <= 1) {
             return false;
         }
-        const preset = this._config?.display?.preset ?? 'compact';
-        if (preset === 'list' || preset === 'magazine') {
+        const preset = this._getPreset();
+        if (preset === 'list') {
             return false;
         }
         if (preset === 'ticker' &&
@@ -2181,7 +2388,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         this._syncCarousel();
     }
     _applyPresetDefaults() {
-        const preset = this._config.display?.preset;
+        const preset = this._getPreset();
         if (!this._config.animation)
             this._config.animation = {};
         if (preset === 'ticker') {
@@ -2197,6 +2404,13 @@ let HassRssCard = class HassRssCard extends i$1 {
             if (this._config.animation.auto_advance === undefined) {
                 this._config.animation.auto_advance = true;
             }
+        }
+        if (preset === 'list' && this._config.animation.auto_advance === undefined) {
+            this._config.animation.auto_advance = false;
+        }
+        if ((preset === 'card' || preset === 'magazine') &&
+            this._config.animation.auto_advance === undefined) {
+            this._config.animation.auto_advance = true;
         }
     }
     _resolveSpeed(animation) {

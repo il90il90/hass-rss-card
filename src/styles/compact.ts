@@ -70,36 +70,30 @@ export const compactStyles = css`
     transform: translateX(20px);
   }
 
-  .carousel-dots {
+  .article-meta {
     display: flex;
-    justify-content: center;
-    gap: 4px;
-    margin-top: 8px;
-  }
-
-  .carousel-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--divider-color, rgba(0, 0, 0, 0.2));
-  }
-
-  .carousel-dot.active {
-    background: var(--primary-color);
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
   }
 
   .list-items {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
   }
 
   .list-item {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    padding-bottom: 12px;
+    padding: 12px 0;
     border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+  }
+
+  .list-item:first-child {
+    padding-top: 0;
   }
 
   .list-item:last-child {
@@ -107,46 +101,165 @@ export const compactStyles = css`
     padding-bottom: 0;
   }
 
+  .list-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .list-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .list-title {
+    font-size: 0.95em;
+    font-weight: 500;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .list-summary {
+    font-size: 0.82em;
+    opacity: 0.72;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .card-item {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+    background: var(--secondary-background-color, rgba(0, 0, 0, 0.02));
   }
 
   .card-item.image-top .item-image,
   .card-item.image-top .placeholder-image {
     width: 100%;
-    height: 160px;
+    height: 180px;
+    border-radius: 0;
+  }
+
+  .card-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .card-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .card-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card-summary {
+    font-size: 0.88em;
+    opacity: 0.78;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .magazine-item {
     position: relative;
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
-    min-height: 180px;
+    min-height: 220px;
+    margin-top: 4px;
   }
 
   .magazine-bg {
     width: 100%;
-    height: 180px;
+    height: 220px;
     object-fit: cover;
     display: block;
+  }
+
+  .magazine-placeholder {
+    background: linear-gradient(
+      135deg,
+      var(--primary-color) 0%,
+      rgba(0, 0, 0, 0.45) 100%
+    );
+    opacity: 0.55;
   }
 
   .magazine-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(transparent 30%, rgba(0, 0, 0, 0.75));
+    background: linear-gradient(transparent 20%, rgba(0, 0, 0, 0.82));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    padding: 16px;
+    padding: 18px;
     color: #fff;
+    gap: 6px;
   }
 
   .magazine-title {
-    font-size: 1.1em;
-    font-weight: 600;
+    font-size: 1.15em;
+    font-weight: 700;
     line-height: 1.3;
+  }
+
+  .magazine-summary {
+    font-size: 0.85em;
+    opacity: 0.9;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .magazine-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+  }
+
+  .magazine-meta .meta,
+  .magazine-meta .feed-name {
+    color: rgba(255, 255, 255, 0.85);
+    opacity: 1;
+  }
+
+  ha-card.preset-list {
+    padding-top: 8px;
+  }
+
+  ha-card.preset-card {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  ha-card.preset-magazine {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  ha-card.preset-ticker .ticker-wrap {
+    margin-top: 2px;
   }
 `;

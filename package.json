@@ -6,6 +6,8 @@
   "main": "dist/hass-rss-card.js",
   "scripts": {
     "build": "rollup -c && node scripts/copy-card-to-integration.js",
+    "test:presets": "node scripts/card_presets_static_test.mjs",
+    "test": "npm run build && npm run test:presets",
     "watch": "rollup -c --watch",
     "lint": "eslint src --ext .ts"
   },
