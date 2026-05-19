@@ -40,6 +40,8 @@ SERVICE_REFRESH_FEED_SCHEMA = vol.Schema(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up HASS RSS from a config entry."""
+    await async_register_card(hass)
+
     config = _get_merged_config(entry)
     interval = timedelta(
         minutes=config.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL)
