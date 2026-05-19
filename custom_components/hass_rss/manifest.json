@@ -1,7 +1,7 @@
 {
   "domain": "hass_rss",
   "name": "HASS RSS",
-  "codeowners": [],
+  "codeowners": ["@il90il90"],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/il90il90/hass-rss-card",
