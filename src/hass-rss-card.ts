@@ -45,6 +45,8 @@ export class HassRssCard extends LitElement {
 
   private _lastLatestKey = '';
 
+  private _carouselSetupKey = '';
+
   static styles = [cardStyles, imageStyles, compactStyles, tickerStyles];
 
   public setConfig(config: HassRssCardConfig): void {
@@ -53,6 +55,7 @@ export class HassRssCard extends LitElement {
     );
     this._config = mergeConfig({ ...config, feeds });
     this._applyPresetDefaults();
+    this._carouselSetupKey = '';
   }
 
   public getCardSize(): number {
@@ -63,15 +66,25 @@ export class HassRssCard extends LitElement {
     return 2;
   }
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    this._carouselSetupKey = '';
+    this._ensureCarouselTimer();
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._clearCarouselTimer();
+    this._carouselSetupKey = '';
   }
 
   updated(changed: Map<string, unknown>): void {
-    if (changed.has('hass') || changed.has('_config')) {
-      const items = this._getItems();
-      const newest = getNewestItem(items);
+    if (!changed.has('hass') && !changed.has('_config')) {
+      return;
+    }
+
+    if (changed.has('hass')) {
+      const newest = getNewestItem(this._getItems());
       if (newest) {
         const latestKey = newest.link || newest.title || '';
         if (latestKey && latestKey !== this._lastLatestKey) {
@@ -79,8 +92,9 @@ export class HassRssCard extends LitElement {
           this._lastLatestKey = latestKey;
         }
       }
-      this._syncCarousel();
     }
+
+    this._ensureCarouselTimer();
   }
 
   protected render(): TemplateResult | typeof nothing {
@@ -119,7 +133,10 @@ export class HassRssCard extends LitElement {
         <button
           class="refresh-btn ${this._refreshing ? 'spinning' : ''}"
           title="Refresh feeds"
-          @click=${this._handleRefresh}
+          @click=${(event: Event) => {
+            event.stopPropagation();
+            void this._handleRefresh();
+          }}
         >
           <ha-icon icon="mdi:refresh"></ha-icon>
         </button>
@@ -460,18 +477,17 @@ export class HassRssCard extends LitElement {
     if (this._refreshing || !this.hass) return;
     this._refreshing = true;
     const entities = getFeedEntityIds(this._config.feeds ?? []);
-    const statesBefore = new Map(
-      entities.map((entityId) => [entityId, this.hass.states[entityId]?.state]),
-    );
+    const before = this._snapshotEntities(entities);
     try {
-      await this.hass.callService('hass_rss', 'refresh_all');
-      await this._waitForStateChange(entities, statesBefore, 15000);
+      await this.hass.callService('hass_rss', 'refresh_all', {});
+      await this._waitForEntityRefresh(entities, before, 15000);
       const items = this._getItems();
       const newest = getNewestItem(items);
       if (newest) {
         this._carouselIndex = 0;
         this._lastLatestKey = newest.link || newest.title || '';
       }
+      this.requestUpdate();
     } catch (error) {
       console.error('HASS RSS refresh failed', error);
     } finally {
@@ -479,18 +495,63 @@ export class HassRssCard extends LitElement {
     }
   }
 
-  private _waitForStateChange(
+  private _snapshotEntities(
     entities: string[],
-    before: Map<string, string | undefined>,
+  ): Map<
+    string,
+    { state?: string; lastUpdated?: string; lastSuccess?: string }
+  > {
+    return new Map(
+      entities.map((entityId) => {
+        const entity = this.hass.states[entityId];
+        return [
+          entityId,
+          {
+            state: entity?.state,
+            lastUpdated: entity?.last_updated,
+            lastSuccess: entity?.attributes?.last_success as string | undefined,
+          },
+        ];
+      }),
+    );
+  }
+
+  private _entitiesRefreshed(
+    entities: string[],
+    before: Map<
+      string,
+      { state?: string; lastUpdated?: string; lastSuccess?: string }
+    >,
+  ): boolean {
+    return entities.some((entityId) => {
+      const entity = this.hass.states[entityId];
+      const previous = before.get(entityId);
+      if (!entity || !previous) {
+        return false;
+      }
+      return (
+        entity.state !== previous.state ||
+        entity.last_updated !== previous.lastUpdated ||
+        entity.attributes?.last_success !== previous.lastSuccess
+      );
+    });
+  }
+
+  private _waitForEntityRefresh(
+    entities: string[],
+    before: Map<
+      string,
+      { state?: string; lastUpdated?: string; lastSuccess?: string }
+    >,
     timeoutMs: number,
   ): Promise<void> {
     const started = Date.now();
     return new Promise((resolve) => {
       const check = (): void => {
-        const changed = entities.some(
-          (entityId) => this.hass.states[entityId]?.state !== before.get(entityId),
-        );
-        if (changed || Date.now() - started >= timeoutMs) {
+        if (
+          this._entitiesRefreshed(entities, before) ||
+          Date.now() - started >= timeoutMs
+        ) {
           resolve();
           return;
         }
@@ -498,6 +559,31 @@ export class HassRssCard extends LitElement {
       };
       check();
     });
+  }
+
+  private _getCarouselSetupKey(): string {
+    const animation = this._config?.animation ?? {};
+    const display = this._config?.display ?? {};
+    return [
+      display.preset ?? 'compact',
+      String(animation.enabled ?? false),
+      animation.type ?? '',
+      String(animation.interval ?? 5),
+      String(this._getItems().length),
+      (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
+    ].join(':');
+  }
+
+  private _ensureCarouselTimer(): void {
+    if (!this._config || !this.hass) {
+      return;
+    }
+    const key = this._getCarouselSetupKey();
+    if (key === this._carouselSetupKey && this._carouselTimer) {
+      return;
+    }
+    this._carouselSetupKey = key;
+    this._syncCarousel();
   }
 
   private _applyPresetDefaults(): void {
@@ -549,7 +635,9 @@ export class HassRssCard extends LitElement {
     const interval = (animation.interval ?? 5) * 1000;
     this._carouselTimer = setInterval(() => {
       if (this._tickerPaused) return;
-      this._carouselIndex = (this._carouselIndex + 1) % items.length;
+      const count = this._getItems().length;
+      if (count <= 1) return;
+      this._carouselIndex = (this._carouselIndex + 1) % count;
       this.requestUpdate();
     }, interval);
   }

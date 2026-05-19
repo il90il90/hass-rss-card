@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
@@ -149,8 +150,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             await data["coordinator"].async_request_refresh()
 
     async def refresh_all(_call: ServiceCall) -> None:
-        for data in hass.data.get(DOMAIN, {}).values():
-            await data["coordinator"].async_request_refresh()
+        coordinators = [
+            data["coordinator"] for data in hass.data.get(DOMAIN, {}).values()
+        ]
+        if not coordinators:
+            _LOGGER.warning("refresh_all called but no HASS RSS feeds are loaded")
+            return
+        await asyncio.gather(
+            *(coordinator.async_request_refresh() for coordinator in coordinators)
+        )
 
     hass.services.async_register(
         DOMAIN,

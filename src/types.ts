@@ -74,6 +74,7 @@ export interface HassRssCardConfig {
 
 export interface HassEntity {
   state: string;
+  last_updated?: string;
   attributes: Record<string, unknown>;
 }
 
