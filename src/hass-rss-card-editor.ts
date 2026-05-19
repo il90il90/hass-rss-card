@@ -2,12 +2,13 @@ import { css, html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import { mergeConfig } from './config-defaults';
-import type { HassRssCardConfig } from './types';
+import type { FeedConfig, HassRssCardConfig, HomeAssistant } from './types';
 import { showIncludesImage } from './types';
+import { listRssSensorEntities } from './utils/rss-entities';
 
 @customElement('hass-rss-card-editor')
 export class HassRssCardEditor extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistantEditor;
+  @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _config!: HassRssCardConfig;
 
@@ -44,9 +45,6 @@ export class HassRssCardEditor extends LitElement {
 
   public setConfig(config: HassRssCardConfig): void {
     this._config = mergeConfig(config);
-    if (!this._config.feeds?.length) {
-      this._config.feeds = [{ entity: '' }];
-    }
   }
 
   protected render(): TemplateResult {
@@ -62,16 +60,26 @@ export class HassRssCardEditor extends LitElement {
   }
 
   private _renderSources(): TemplateResult {
-    const feeds = this._config.feeds ?? [{ entity: '' }];
+    const feeds = this._config.feeds ?? [];
     const rssEntities = this._getRssEntities();
+    const sourceOptions = listRssSensorEntities(this.hass);
 
     return html`
       <div class="section">
         <div class="section-title">Sources</div>
         <p class="section-help">
-          Choose RSS sensor entities created by the HASS RSS integration.
+          Limit which RSS sensors this card can use. Leave empty to allow every
+          HASS RSS sensor and switch between them from the card header.
           To add a new RSS URL, go to Settings → Devices &amp; Services → HASS RSS.
         </p>
+        ${feeds.length === 0
+          ? html`
+              <p class="section-help">
+                No sources pinned yet. The card will list all
+                ${sourceOptions.length} available RSS sensors.
+              </p>
+            `
+          : ''}
         ${feeds.map(
           (feed, index) => html`
             <div class="feed-row">
@@ -105,8 +113,54 @@ export class HassRssCardEditor extends LitElement {
             </div>
           `,
         )}
-        <ha-button class="add-btn" @click=${this._addFeed}>Add RSS sensor</ha-button>
+        <ha-button class="add-btn" @click=${this._addFeed}>Add another source</ha-button>
+        ${this._renderActiveSourcePicker(sourceOptions)}
       </div>
+    `;
+  }
+
+  private _renderActiveSourcePicker(
+    sourceOptions: { entity: string; name: string }[],
+  ): TemplateResult | typeof import('lit').nothing {
+    if (sourceOptions.length <= 1) {
+      return html``;
+    }
+
+    const configured = (this._config.feeds ?? []).filter((feed) => feed.entity?.trim());
+    const options =
+      configured.length > 0
+        ? configured.map((feed) => {
+            const match = sourceOptions.find((option) => option.entity === feed.entity);
+            return (
+              match ?? {
+                entity: feed.entity,
+                name: feed.entity,
+              }
+            );
+          })
+        : sourceOptions;
+
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${{ active_source: this._config.active_source ?? options[0]?.entity }}
+        .schema=${[
+          {
+            name: 'active_source',
+            selector: {
+              select: {
+                mode: 'dropdown',
+                options: options.map((option) => ({
+                  value: option.entity,
+                  label: option.name,
+                })),
+              },
+            },
+          },
+        ]}
+        @value-changed=${(ev: CustomEvent) =>
+          this._updateConfig('active_source', ev.detail.value.active_source)}
+      ></ha-form>
     `;
   }
 
@@ -342,6 +396,7 @@ export class HassRssCardEditor extends LitElement {
               },
             },
             { name: 'show_refresh_button', selector: { boolean: {} } },
+            { name: 'show_source_selector', selector: { boolean: {} } },
             { name: 'track_read_unread', selector: { boolean: {} } },
           ]}
           @value-changed=${(ev: CustomEvent) =>
@@ -403,13 +458,15 @@ export class HassRssCardEditor extends LitElement {
 
   private _addFeed(): void {
     const feeds = [...(this._config.feeds ?? []), { entity: '' }];
-    this._updateConfig('feeds', feeds);
+    this._config = { ...this._config, feeds };
+    this._dispatchConfig();
   }
 
   private _removeFeed(index: number): void {
     const feeds = [...(this._config.feeds ?? [])];
     feeds.splice(index, 1);
-    this._updateConfig('feeds', feeds);
+    this._config = { ...this._config, feeds: feeds.length ? feeds : [] };
+    this._dispatchConfig();
   }
 
   private _updateFeed(
@@ -419,38 +476,37 @@ export class HassRssCardEditor extends LitElement {
   ): void {
     const feeds = [...(this._config.feeds ?? [])];
     feeds[index] = { ...feeds[index], [key]: value };
-    this._updateConfig('feeds', feeds);
+    this._config = { ...this._config, feeds };
+    this._dispatchConfig();
   }
 
   private _updateConfig(key: keyof HassRssCardConfig, value: unknown): void {
-    let nextValue = value;
-    if (key === 'feeds' && Array.isArray(value)) {
-      nextValue = value.filter(
-        (feed) =>
-          typeof feed === 'object' &&
-          feed &&
-          'entity' in feed &&
-          typeof feed.entity === 'string' &&
-          feed.entity.trim().length > 0,
-      );
-    }
-    const config = { ...this._config, [key]: nextValue };
-    this._config = config;
+    this._config = { ...this._config, [key]: value };
+    this._dispatchConfig();
+  }
+
+  private _dispatchConfig(): void {
+    const feeds = (this._config.feeds ?? []).filter(
+      (feed): feed is FeedConfig =>
+        typeof feed === 'object' &&
+        feed !== null &&
+        typeof feed.entity === 'string' &&
+        feed.entity.trim().length > 0,
+    );
+
     this.dispatchEvent(
       new CustomEvent('config-changed', {
-        detail: { config },
+        detail: {
+          config: {
+            ...this._config,
+            feeds,
+          },
+        },
         bubbles: true,
         composed: true,
       }),
     );
   }
-}
-
-interface HomeAssistantEditor {
-  states: Record<
-    string,
-    { entity_id: string; attributes?: Record<string, unknown> }
-  >;
 }
 
 declare global {

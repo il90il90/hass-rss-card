@@ -23,6 +23,11 @@ export const cardStyles = css`
     gap: 8px;
   }
 
+  .header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
   .header-title {
     font-size: 0.85em;
     font-weight: 500;
@@ -30,6 +35,34 @@ export const cardStyles = css`
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .source-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.85em;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  .source-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 6px;
+    background: var(--card-background-color, var(--ha-card-background, white));
+    color: inherit;
+    font: inherit;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+
+  .source-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
   }
 
   .refresh-btn {

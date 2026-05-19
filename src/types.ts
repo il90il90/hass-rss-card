@@ -51,6 +51,7 @@ export interface FeaturesConfig {
   show_new_badge?: boolean;
   new_badge_duration?: number;
   show_refresh_button?: boolean;
+  show_source_selector?: boolean;
   track_read_unread?: boolean;
 }
 
@@ -64,6 +65,7 @@ export interface DisplayConfig {
 export interface HassRssCardConfig {
   type?: string;
   feeds?: FeedConfig[];
+  active_source?: string;
   display?: DisplayConfig;
   animation?: AnimationConfig;
   features?: FeaturesConfig;

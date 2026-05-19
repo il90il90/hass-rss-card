@@ -134,6 +134,7 @@ const DEFAULT_CONFIG = {
         show_new_badge: true,
         new_badge_duration: 3600,
         show_refresh_button: true,
+        show_source_selector: true,
         track_read_unread: true,
     },
     always_show_latest: true,
@@ -154,12 +155,34 @@ function showIncludesSummary(show) {
     return show === 'title_summary' || show === 'title_image_summary';
 }
 
+function getFeedLabel(hass, entityId) {
+    const attrs = hass.states[entityId]?.attributes;
+    return String(attrs?.feed_name ?? entityId);
+}
+function listRssSensorEntities(hass) {
+    return Object.keys(hass.states)
+        .filter((entityId) => entityId.startsWith('sensor.') &&
+        hass.states[entityId]?.attributes?.feed_name !== undefined)
+        .map((entityId) => ({
+        entity: entityId,
+        name: getFeedLabel(hass, entityId),
+    }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+function resolveSourceOptions(hass, configuredFeeds) {
+    const configured = configuredFeeds.filter((feed) => feed.entity?.trim());
+    if (configured.length > 0) {
+        return configured.map((feed) => ({
+            entity: feed.entity,
+            name: getFeedLabel(hass, feed.entity),
+        }));
+    }
+    return listRssSensorEntities(hass);
+}
+
 let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     setConfig(config) {
         this._config = mergeConfig(config);
-        if (!this._config.feeds?.length) {
-            this._config.feeds = [{ entity: '' }];
-        }
     }
     render() {
         if (!this.hass || !this._config)
@@ -173,15 +196,25 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     `;
     }
     _renderSources() {
-        const feeds = this._config.feeds ?? [{ entity: '' }];
+        const feeds = this._config.feeds ?? [];
         const rssEntities = this._getRssEntities();
+        const sourceOptions = listRssSensorEntities(this.hass);
         return b `
       <div class="section">
         <div class="section-title">Sources</div>
         <p class="section-help">
-          Choose RSS sensor entities created by the HASS RSS integration.
+          Limit which RSS sensors this card can use. Leave empty to allow every
+          HASS RSS sensor and switch between them from the card header.
           To add a new RSS URL, go to Settings → Devices &amp; Services → HASS RSS.
         </p>
+        ${feeds.length === 0
+            ? b `
+              <p class="section-help">
+                No sources pinned yet. The card will list all
+                ${sourceOptions.length} available RSS sensors.
+              </p>
+            `
+            : ''}
         ${feeds.map((feed, index) => b `
             <div class="feed-row">
               <ha-entity-picker
@@ -207,8 +240,45 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
             : ''}
             </div>
           `)}
-        <ha-button class="add-btn" @click=${this._addFeed}>Add RSS sensor</ha-button>
+        <ha-button class="add-btn" @click=${this._addFeed}>Add another source</ha-button>
+        ${this._renderActiveSourcePicker(sourceOptions)}
       </div>
+    `;
+    }
+    _renderActiveSourcePicker(sourceOptions) {
+        if (sourceOptions.length <= 1) {
+            return b ``;
+        }
+        const configured = (this._config.feeds ?? []).filter((feed) => feed.entity?.trim());
+        const options = configured.length > 0
+            ? configured.map((feed) => {
+                const match = sourceOptions.find((option) => option.entity === feed.entity);
+                return (match ?? {
+                    entity: feed.entity,
+                    name: feed.entity,
+                });
+            })
+            : sourceOptions;
+        return b `
+      <ha-form
+        .hass=${this.hass}
+        .data=${{ active_source: this._config.active_source ?? options[0]?.entity }}
+        .schema=${[
+            {
+                name: 'active_source',
+                selector: {
+                    select: {
+                        mode: 'dropdown',
+                        options: options.map((option) => ({
+                            value: option.entity,
+                            label: option.name,
+                        })),
+                    },
+                },
+            },
+        ]}
+        @value-changed=${(ev) => this._updateConfig('active_source', ev.detail.value.active_source)}
+      ></ha-form>
     `;
     }
     _renderDisplay() {
@@ -435,6 +505,7 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                 },
             },
             { name: 'show_refresh_button', selector: { boolean: {} } },
+            { name: 'show_source_selector', selector: { boolean: {} } },
             { name: 'track_read_unread', selector: { boolean: {} } },
         ]}
           @value-changed=${(ev) => this._updateConfig('features', {
@@ -487,31 +558,37 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     }
     _addFeed() {
         const feeds = [...(this._config.feeds ?? []), { entity: '' }];
-        this._updateConfig('feeds', feeds);
+        this._config = { ...this._config, feeds };
+        this._dispatchConfig();
     }
     _removeFeed(index) {
         const feeds = [...(this._config.feeds ?? [])];
         feeds.splice(index, 1);
-        this._updateConfig('feeds', feeds);
+        this._config = { ...this._config, feeds: feeds.length ? feeds : [] };
+        this._dispatchConfig();
     }
     _updateFeed(index, key, value) {
         const feeds = [...(this._config.feeds ?? [])];
         feeds[index] = { ...feeds[index], [key]: value };
-        this._updateConfig('feeds', feeds);
+        this._config = { ...this._config, feeds };
+        this._dispatchConfig();
     }
     _updateConfig(key, value) {
-        let nextValue = value;
-        if (key === 'feeds' && Array.isArray(value)) {
-            nextValue = value.filter((feed) => typeof feed === 'object' &&
-                feed &&
-                'entity' in feed &&
-                typeof feed.entity === 'string' &&
-                feed.entity.trim().length > 0);
-        }
-        const config = { ...this._config, [key]: nextValue };
-        this._config = config;
+        this._config = { ...this._config, [key]: value };
+        this._dispatchConfig();
+    }
+    _dispatchConfig() {
+        const feeds = (this._config.feeds ?? []).filter((feed) => typeof feed === 'object' &&
+            feed !== null &&
+            typeof feed.entity === 'string' &&
+            feed.entity.trim().length > 0);
         this.dispatchEvent(new CustomEvent('config-changed', {
-            detail: { config },
+            detail: {
+                config: {
+                    ...this._config,
+                    feeds,
+                },
+            },
             bubbles: true,
             composed: true,
         }));
@@ -731,6 +808,11 @@ const cardStyles = i$4 `
     gap: 8px;
   }
 
+  .header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
   .header-title {
     font-size: 0.85em;
     font-weight: 500;
@@ -738,6 +820,34 @@ const cardStyles = i$4 `
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .source-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.85em;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  .source-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    border-radius: 6px;
+    background: var(--card-background-color, var(--ha-card-background, white));
+    color: inherit;
+    font: inherit;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+
+  .source-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
   }
 
   .refresh-btn {
@@ -1223,35 +1333,76 @@ let HassRssCard = class HassRssCard extends i$1 {
     `;
     }
     _renderHeader(features) {
-        if (!features.show_refresh_button)
+        const sources = this._getSourceOptions();
+        const showSelector = features.show_source_selector !== false && sources.length > 1;
+        const showRefresh = features.show_refresh_button !== false;
+        if (!showSelector && !showRefresh) {
             return A;
+        }
+        const activeSource = this._resolveActiveSource(sources);
         return b `
       <div class="header">
-        <span class="header-title">
-          <ha-icon icon="mdi:rss"></ha-icon>
-          RSS
-        </span>
-        <button
-          class="refresh-btn ${this._refreshing ? 'spinning' : ''}"
-          title="Refresh feeds"
-          @click=${(event) => {
-            event.stopPropagation();
-            void this._handleRefresh();
-        }}
-        >
-          <ha-icon icon="mdi:refresh"></ha-icon>
-        </button>
+        <div class="header-left">
+          ${showSelector
+            ? b `
+                <label class="source-label">
+                  <ha-icon icon="mdi:rss"></ha-icon>
+                  <select
+                    class="source-select"
+                    .value=${activeSource}
+                    @change=${this._onSourceChange}
+                    @click=${(event) => event.stopPropagation()}
+                  >
+                    ${sources.map((source) => b `
+                        <option value=${source.entity}>${source.name}</option>
+                      `)}
+                  </select>
+                </label>
+              `
+            : b `
+                <span class="header-title">
+                  <ha-icon icon="mdi:rss"></ha-icon>
+                  ${sources[0]?.name ?? 'RSS'}
+                </span>
+              `}
+        </div>
+        ${showRefresh
+            ? b `
+              <button
+                class="refresh-btn ${this._refreshing ? 'spinning' : ''}"
+                title="Refresh feed"
+                @click=${(event) => {
+                event.stopPropagation();
+                void this._handleRefresh();
+            }}
+              >
+                <ha-icon icon="mdi:refresh"></ha-icon>
+              </button>
+            `
+            : A}
       </div>
     `;
     }
     _renderEmpty() {
+        const sources = this._getSourceOptions();
         const feeds = this._config.feeds ?? [];
-        if (feeds.length === 0) {
-            return b `<div class="empty">Add RSS feed entities in the card editor.</div>`;
+        if (sources.length === 0) {
+            return b `
+        <div class="empty">
+          No RSS sensors found. Add a feed in Settings → Devices &amp; Services →
+          HASS RSS, then pick a source above.
+        </div>
+      `;
         }
-        const hasMissing = feeds.some((f) => !this.hass.states[f.entity]);
+        if (feeds.length === 0 && sources.length > 0) {
+            return b `
+        <div class="empty">Choose a source above to show its headlines.</div>
+      `;
+        }
+        const activeFeeds = this._getActiveFeeds();
+        const hasMissing = activeFeeds.some((feed) => !this.hass.states[feed.entity]);
         if (hasMissing) {
-            return b `<div class="error">One or more feed entities are unavailable.</div>`;
+            return b `<div class="error">The selected RSS sensor is unavailable.</div>`;
         }
         return b `<div class="empty">No articles available.</div>`;
     }
@@ -1506,9 +1657,59 @@ let HassRssCard = class HassRssCard extends i$1 {
             return A;
         return b `<span class="new-badge">NEW</span>`;
     }
+    _getSourceOptions() {
+        if (!this.hass) {
+            return [];
+        }
+        return resolveSourceOptions(this.hass, this._config.feeds ?? []);
+    }
+    _resolveActiveSource(sources) {
+        const active = this._config.active_source;
+        if (active && sources.some((source) => source.entity === active)) {
+            return active;
+        }
+        return sources[0]?.entity ?? '';
+    }
+    _getActiveFeeds() {
+        const sources = this._getSourceOptions();
+        if (sources.length === 0) {
+            return [];
+        }
+        const showSelector = this._config.features?.show_source_selector !== false;
+        if (showSelector || sources.length === 1) {
+            const active = this._resolveActiveSource(sources);
+            return active ? [{ entity: active }] : [];
+        }
+        return sources.map((source) => ({ entity: source.entity }));
+    }
+    _onSourceChange(event) {
+        const entity = event.target.value;
+        if (!entity || entity === this._config.active_source) {
+            return;
+        }
+        this._config = mergeConfig({ ...this._config, active_source: entity });
+        this._carouselIndex = 0;
+        this._lastLatestKey = '';
+        this._carouselSetupKey = '';
+        this._fireConfigChanged();
+        this.requestUpdate();
+    }
+    _fireConfigChanged() {
+        const feeds = (this._config.feeds ?? []).filter((feed) => feed.entity && feed.entity.trim().length > 0);
+        this.dispatchEvent(new CustomEvent('config-changed', {
+            detail: {
+                config: {
+                    ...this._config,
+                    feeds,
+                },
+            },
+            bubbles: true,
+            composed: true,
+        }));
+    }
     _getItems() {
         const maxItems = this._config.display?.max_items ?? 5;
-        return mergeFeedItems(this.hass, this._config.feeds ?? [], maxItems);
+        return mergeFeedItems(this.hass, this._getActiveFeeds(), maxItems);
     }
     _openItem(item) {
         if (this._config.features?.track_read_unread) {
@@ -1523,10 +1724,20 @@ let HassRssCard = class HassRssCard extends i$1 {
         if (this._refreshing || !this.hass)
             return;
         this._refreshing = true;
-        const entities = getFeedEntityIds(this._config.feeds ?? []);
+        const entities = getFeedEntityIds(this._getActiveFeeds());
+        if (entities.length === 0) {
+            return;
+        }
         const before = this._snapshotEntities(entities);
         try {
-            await this.hass.callService('hass_rss', 'refresh_all', {});
+            if (entities.length === 1) {
+                await this.hass.callService('hass_rss', 'refresh_feed', {
+                    entity_id: entities[0],
+                });
+            }
+            else {
+                await this.hass.callService('hass_rss', 'refresh_all', {});
+            }
             await this._waitForEntityRefresh(entities, before, 15000);
             const items = this._getItems();
             const newest = getNewestItem(items);
@@ -1596,6 +1807,7 @@ let HassRssCard = class HassRssCard extends i$1 {
             animation.type ?? '',
             String(animation.interval ?? 5),
             String(this._getItems().length),
+            this._resolveActiveSource(this._getSourceOptions()),
             (this._config?.feeds ?? []).map((feed) => feed.entity).join('|'),
         ].join(':');
     }
