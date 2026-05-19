@@ -43,6 +43,8 @@ export class HassRssCard extends LitElement {
 
   private _carouselTimer: ReturnType<typeof setInterval> | undefined;
 
+  private _lastLatestKey = '';
+
   static styles = [cardStyles, imageStyles, compactStyles, tickerStyles];
 
   public setConfig(config: HassRssCardConfig): void {
@@ -68,6 +70,14 @@ export class HassRssCard extends LitElement {
 
   updated(changed: Map<string, unknown>): void {
     if (changed.has('hass') || changed.has('_config')) {
+      const items = this._getItems();
+      if (this._config?.always_show_latest && items.length > 0) {
+        const latestKey = items[0].link || items[0].title || '';
+        if (latestKey && latestKey !== this._lastLatestKey) {
+          this._carouselIndex = 0;
+          this._lastLatestKey = latestKey;
+        }
+      }
       this._syncCarousel();
     }
   }
@@ -222,11 +232,52 @@ export class HassRssCard extends LitElement {
 
   private _renderTicker(
     items: RssItem[],
-    _dir: 'rtl' | 'ltr',
+    dir: 'rtl' | 'ltr',
     features: FeaturesConfig,
   ): TemplateResult {
     void this._readVersion;
     const animation = this._config.animation ?? {};
+    const useCarousel =
+      animation.enabled !== false &&
+      animation.type === 'carousel' &&
+      !prefersReducedMotion() &&
+      items.length > 1;
+
+    if (useCarousel) {
+      const item = items[this._carouselIndex] ?? items[0];
+      const display = this._config.display ?? {};
+      const transition = animation.transition ?? 'fade';
+      return html`
+        <div
+          class="ticker-wrap ticker-single"
+          dir=${dir}
+          @mouseenter=${() => {
+            if (animation.pause_on_hover) this._tickerPaused = true;
+          }}
+          @mouseleave=${() => {
+            this._tickerPaused = false;
+          }}
+        >
+          <div
+            class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
+            key=${`${this._carouselIndex}-${item.link}`}
+          >
+            ${this._renderImage(item, display, display.image ?? {}, 'small')}
+            ${this._renderNewBadge(item, features)}
+            <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
+              ${item.title}
+            </span>
+            ${features.show_relative_time
+              ? html`<span class="meta">${formatRelativeTime(
+                  item.published,
+                  this.hass.locale?.language,
+                )}</span>`
+              : nothing}
+          </div>
+        </div>
+      `;
+    }
+
     const enabled =
       animation.enabled !== false && !prefersReducedMotion();
     const speed = this._resolveSpeed(animation);
@@ -405,20 +456,41 @@ export class HassRssCard extends LitElement {
   }
 
   private async _handleRefresh(): Promise<void> {
-    if (this._refreshing) return;
+    if (this._refreshing || !this.hass) return;
     this._refreshing = true;
     const entities = getFeedEntityIds(this._config.feeds ?? []);
+    const statesBefore = new Map(
+      entities.map((entityId) => [entityId, this.hass.states[entityId]?.state]),
+    );
     try {
-      for (const entityId of entities) {
-        await this.hass.callService('hass_rss', 'refresh_feed', {
-          entity_id: entityId,
-        });
-      }
+      await this.hass.callService('hass_rss', 'refresh_all');
+      await this._waitForStateChange(entities, statesBefore, 15000);
+    } catch (error) {
+      console.error('HASS RSS refresh failed', error);
     } finally {
-      setTimeout(() => {
-        this._refreshing = false;
-      }, 800);
+      this._refreshing = false;
     }
+  }
+
+  private _waitForStateChange(
+    entities: string[],
+    before: Map<string, string | undefined>,
+    timeoutMs: number,
+  ): Promise<void> {
+    const started = Date.now();
+    return new Promise((resolve) => {
+      const check = (): void => {
+        const changed = entities.some(
+          (entityId) => this.hass.states[entityId]?.state !== before.get(entityId),
+        );
+        if (changed || Date.now() - started >= timeoutMs) {
+          resolve();
+          return;
+        }
+        window.setTimeout(check, 300);
+      };
+      check();
+    });
   }
 
   private _applyPresetDefaults(): void {
@@ -430,7 +502,10 @@ export class HassRssCard extends LitElement {
         this._config.animation.enabled = true;
       }
       if (!this._config.animation.type) {
-        this._config.animation.type = 'ticker';
+        this._config.animation.type = 'carousel';
+      }
+      if (!this._config.animation.interval) {
+        this._config.animation.interval = 5;
       }
     }
   }
@@ -450,27 +525,24 @@ export class HassRssCard extends LitElement {
     this._clearCarouselTimer();
     const animation = this._config?.animation;
     const items = this._getItems();
+    const preset = this._config?.display?.preset ?? 'compact';
+    const supportsCarousel =
+      preset === 'compact' || preset === 'ticker';
 
     if (
       !animation?.enabled ||
       animation.type !== 'carousel' ||
+      !supportsCarousel ||
       prefersReducedMotion() ||
       items.length <= 1
     ) {
       return;
     }
 
-    if (this._config.always_show_latest) {
-      this._carouselIndex = 0;
-    }
-
-    const interval = (animation.interval ?? 8) * 1000;
+    const interval = (animation.interval ?? 5) * 1000;
     this._carouselTimer = setInterval(() => {
-      if (this._config.always_show_latest) {
-        this._carouselIndex = 0;
-      } else {
-        this._carouselIndex = (this._carouselIndex + 1) % items.length;
-      }
+      if (this._tickerPaused) return;
+      this._carouselIndex = (this._carouselIndex + 1) % items.length;
       this.requestUpdate();
     }, interval);
   }

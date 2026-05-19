@@ -226,7 +226,8 @@ export class HassRssCardEditor extends LitElement {
   private _renderAnimation(): TemplateResult {
     const animation = this._config.animation ?? {};
     const enabled = animation.enabled ?? false;
-    const isTicker = animation.type === 'ticker';
+    const isTickerScroll = animation.type === 'ticker';
+    const isCarousel = animation.type === 'carousel';
     const isCustomSpeed = animation.speed_preset === 'custom';
 
     const schema = [
@@ -238,15 +239,37 @@ export class HassRssCardEditor extends LitElement {
               selector: {
                 select: {
                   options: [
-                    { value: 'ticker', label: 'Ticker scroll' },
-                    { value: 'carousel', label: 'Carousel' },
+                    { value: 'carousel', label: 'Rotate headlines' },
+                    { value: 'ticker', label: 'Continuous scroll' },
                   ],
                 },
               },
             },
           ]
         : []),
-      ...(enabled && isTicker
+      ...(enabled && isCarousel
+        ? [
+            {
+              name: 'interval',
+              selector: {
+                number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
+              },
+            },
+            {
+              name: 'transition',
+              selector: {
+                select: {
+                  options: [
+                    { value: 'fade', label: 'Fade' },
+                    { value: 'slide', label: 'Slide' },
+                    { value: 'none', label: 'None' },
+                  ],
+                },
+              },
+            },
+          ]
+        : []),
+      ...(enabled && isTickerScroll
         ? [
             {
               name: 'speed_preset',
@@ -276,28 +299,6 @@ export class HassRssCardEditor extends LitElement {
                   },
                 ]
               : []),
-          ]
-        : []),
-      ...(enabled && !isTicker
-        ? [
-            {
-              name: 'interval',
-              selector: {
-                number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
-              },
-            },
-            {
-              name: 'transition',
-              selector: {
-                select: {
-                  options: [
-                    { value: 'fade', label: 'Fade' },
-                    { value: 'slide', label: 'Slide' },
-                    { value: 'none', label: 'None' },
-                  ],
-                },
-              },
-            },
           ]
         : []),
       ...(enabled

@@ -83,4 +83,37 @@ export const tickerStyles = css`
     width: 28px;
     height: 28px;
   }
+
+  .ticker-wrap.ticker-single {
+    mask-image: none;
+    padding: 4px 0;
+  }
+
+  .ticker-single .ticker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    animation: ticker-fade-in 0.45s ease;
+  }
+
+  .ticker-single .ticker-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @keyframes ticker-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 `;

@@ -31,8 +31,9 @@
                   },
                   "animation": {
                     "enabled": true,
-                    "type": "ticker",
-                    "speed_preset": "medium",
+                    "type": "carousel",
+                    "interval": 5,
+                    "transition": "fade",
                     "pause_on_hover": true
                   },
                   "features": {

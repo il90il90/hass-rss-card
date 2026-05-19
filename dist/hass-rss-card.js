@@ -125,7 +125,7 @@ const DEFAULT_CONFIG = {
         type: 'carousel',
         speed_preset: 'medium',
         speed: 50,
-        interval: 8,
+        interval: 5,
         transition: 'fade',
         pause_on_hover: true,
     },
@@ -324,7 +324,8 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
     _renderAnimation() {
         const animation = this._config.animation ?? {};
         const enabled = animation.enabled ?? false;
-        const isTicker = animation.type === 'ticker';
+        const isTickerScroll = animation.type === 'ticker';
+        const isCarousel = animation.type === 'carousel';
         const isCustomSpeed = animation.speed_preset === 'custom';
         const schema = [
             { name: 'enabled', selector: { boolean: {} } },
@@ -335,15 +336,37 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                         selector: {
                             select: {
                                 options: [
-                                    { value: 'ticker', label: 'Ticker scroll' },
-                                    { value: 'carousel', label: 'Carousel' },
+                                    { value: 'carousel', label: 'Rotate headlines' },
+                                    { value: 'ticker', label: 'Continuous scroll' },
                                 ],
                             },
                         },
                     },
                 ]
                 : []),
-            ...(enabled && isTicker
+            ...(enabled && isCarousel
+                ? [
+                    {
+                        name: 'interval',
+                        selector: {
+                            number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
+                        },
+                    },
+                    {
+                        name: 'transition',
+                        selector: {
+                            select: {
+                                options: [
+                                    { value: 'fade', label: 'Fade' },
+                                    { value: 'slide', label: 'Slide' },
+                                    { value: 'none', label: 'None' },
+                                ],
+                            },
+                        },
+                    },
+                ]
+                : []),
+            ...(enabled && isTickerScroll
                 ? [
                     {
                         name: 'speed_preset',
@@ -373,28 +396,6 @@ let HassRssCardEditor = class HassRssCardEditor extends i$1 {
                             },
                         ]
                         : []),
-                ]
-                : []),
-            ...(enabled && !isTicker
-                ? [
-                    {
-                        name: 'interval',
-                        selector: {
-                            number: { min: 3, max: 60, step: 1, unit_of_measurement: 's' },
-                        },
-                    },
-                    {
-                        name: 'transition',
-                        selector: {
-                            select: {
-                                options: [
-                                    { value: 'fade', label: 'Fade' },
-                                    { value: 'slide', label: 'Slide' },
-                                    { value: 'none', label: 'None' },
-                                ],
-                            },
-                        },
-                    },
                 ]
                 : []),
             ...(enabled
@@ -959,6 +960,39 @@ const tickerStyles = i$4 `
     width: 28px;
     height: 28px;
   }
+
+  .ticker-wrap.ticker-single {
+    mask-image: none;
+    padding: 4px 0;
+  }
+
+  .ticker-single .ticker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    animation: ticker-fade-in 0.45s ease;
+  }
+
+  .ticker-single .ticker-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @keyframes ticker-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 `;
 
 function mergeFeedItems(hass, feeds, maxItems) {
@@ -1106,6 +1140,7 @@ let HassRssCard = class HassRssCard extends i$1 {
         this._refreshing = false;
         this._tickerPaused = false;
         this._readVersion = 0;
+        this._lastLatestKey = '';
     }
     setConfig(config) {
         const feeds = (config.feeds ?? []).filter((feed) => feed.entity && feed.entity.trim().length > 0);
@@ -1128,6 +1163,14 @@ let HassRssCard = class HassRssCard extends i$1 {
     }
     updated(changed) {
         if (changed.has('hass') || changed.has('_config')) {
+            const items = this._getItems();
+            if (this._config?.always_show_latest && items.length > 0) {
+                const latestKey = items[0].link || items[0].title || '';
+                if (latestKey && latestKey !== this._lastLatestKey) {
+                    this._carouselIndex = 0;
+                    this._lastLatestKey = latestKey;
+                }
+            }
             this._syncCarousel();
         }
     }
@@ -1253,9 +1296,45 @@ let HassRssCard = class HassRssCard extends i$1 {
       </div>
     `;
     }
-    _renderTicker(items, _dir, features) {
+    _renderTicker(items, dir, features) {
         void this._readVersion;
         const animation = this._config.animation ?? {};
+        const useCarousel = animation.enabled !== false &&
+            animation.type === 'carousel' &&
+            !prefersReducedMotion() &&
+            items.length > 1;
+        if (useCarousel) {
+            const item = items[this._carouselIndex] ?? items[0];
+            const display = this._config.display ?? {};
+            const transition = animation.transition ?? 'fade';
+            return b `
+        <div
+          class="ticker-wrap ticker-single"
+          dir=${dir}
+          @mouseenter=${() => {
+                if (animation.pause_on_hover)
+                    this._tickerPaused = true;
+            }}
+          @mouseleave=${() => {
+                this._tickerPaused = false;
+            }}
+        >
+          <div
+            class="ticker-item item carousel-item ${transition} ${features.track_read_unread && isRead(item.link) ? 'read' : ''}"
+            key=${`${this._carouselIndex}-${item.link}`}
+          >
+            ${this._renderImage(item, display, display.image ?? {}, 'small')}
+            ${this._renderNewBadge(item, features)}
+            <span class="ticker-title item-link" @click=${() => this._openItem(item)}>
+              ${item.title}
+            </span>
+            ${features.show_relative_time
+                ? b `<span class="meta">${formatRelativeTime(item.published, this.hass.locale?.language)}</span>`
+                : A}
+          </div>
+        </div>
+      `;
+        }
         const enabled = animation.enabled !== false && !prefersReducedMotion();
         const speed = this._resolveSpeed(animation);
         const duration = this._estimateTickerDuration(items.length, speed);
@@ -1409,22 +1488,35 @@ let HassRssCard = class HassRssCard extends i$1 {
         }
     }
     async _handleRefresh() {
-        if (this._refreshing)
+        if (this._refreshing || !this.hass)
             return;
         this._refreshing = true;
         const entities = getFeedEntityIds(this._config.feeds ?? []);
+        const statesBefore = new Map(entities.map((entityId) => [entityId, this.hass.states[entityId]?.state]));
         try {
-            for (const entityId of entities) {
-                await this.hass.callService('hass_rss', 'refresh_feed', {
-                    entity_id: entityId,
-                });
-            }
+            await this.hass.callService('hass_rss', 'refresh_all');
+            await this._waitForStateChange(entities, statesBefore, 15000);
+        }
+        catch (error) {
+            console.error('HASS RSS refresh failed', error);
         }
         finally {
-            setTimeout(() => {
-                this._refreshing = false;
-            }, 800);
+            this._refreshing = false;
         }
+    }
+    _waitForStateChange(entities, before, timeoutMs) {
+        const started = Date.now();
+        return new Promise((resolve) => {
+            const check = () => {
+                const changed = entities.some((entityId) => this.hass.states[entityId]?.state !== before.get(entityId));
+                if (changed || Date.now() - started >= timeoutMs) {
+                    resolve();
+                    return;
+                }
+                window.setTimeout(check, 300);
+            };
+            check();
+        });
     }
     _applyPresetDefaults() {
         const preset = this._config.display?.preset;
@@ -1435,7 +1527,10 @@ let HassRssCard = class HassRssCard extends i$1 {
                 this._config.animation.enabled = true;
             }
             if (!this._config.animation.type) {
-                this._config.animation.type = 'ticker';
+                this._config.animation.type = 'carousel';
+            }
+            if (!this._config.animation.interval) {
+                this._config.animation.interval = 5;
             }
         }
     }
@@ -1453,23 +1548,20 @@ let HassRssCard = class HassRssCard extends i$1 {
         this._clearCarouselTimer();
         const animation = this._config?.animation;
         const items = this._getItems();
+        const preset = this._config?.display?.preset ?? 'compact';
+        const supportsCarousel = preset === 'compact' || preset === 'ticker';
         if (!animation?.enabled ||
             animation.type !== 'carousel' ||
+            !supportsCarousel ||
             prefersReducedMotion() ||
             items.length <= 1) {
             return;
         }
-        if (this._config.always_show_latest) {
-            this._carouselIndex = 0;
-        }
-        const interval = (animation.interval ?? 8) * 1000;
+        const interval = (animation.interval ?? 5) * 1000;
         this._carouselTimer = setInterval(() => {
-            if (this._config.always_show_latest) {
-                this._carouselIndex = 0;
-            }
-            else {
-                this._carouselIndex = (this._carouselIndex + 1) % items.length;
-            }
+            if (this._tickerPaused)
+                return;
+            this._carouselIndex = (this._carouselIndex + 1) % items.length;
             this.requestUpdate();
         }, interval);
     }

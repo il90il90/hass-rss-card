@@ -41,7 +41,7 @@ export const DEFAULT_CONFIG: HassRssCardConfig = {
     type: 'carousel',
     speed_preset: 'medium',
     speed: 50,
-    interval: 8,
+    interval: 5,
     transition: 'fade',
     pause_on_hover: true,
   },

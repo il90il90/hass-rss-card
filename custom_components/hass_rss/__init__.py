@@ -135,13 +135,18 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             return
 
         if entity_id:
+            state = hass.states.get(entity_id)
+            feed_name = state.attributes.get("feed_name") if state else None
             for eid, data in hass.data.get(DOMAIN, {}).items():
-                coord = data["coordinator"]
-                sensor_name = data["config"].get(CONF_NAME)
-                state = hass.states.get(entity_id)
-                if state and state.attributes.get("feed_name") == sensor_name:
-                    await coord.async_request_refresh()
+                if data["config"].get(CONF_NAME) == feed_name:
+                    await data["coordinator"].async_request_refresh()
                     return
+            _LOGGER.warning(
+                "Could not resolve feed for %s, refreshing all feeds", entity_id
+            )
+
+        for data in hass.data.get(DOMAIN, {}).values():
+            await data["coordinator"].async_request_refresh()
 
     async def refresh_all(_call: ServiceCall) -> None:
         for data in hass.data.get(DOMAIN, {}).values():
