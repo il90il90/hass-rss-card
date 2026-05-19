@@ -4,7 +4,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { mergeConfig } from './config-defaults';
 import type { FeedConfig, HassRssCardConfig, HomeAssistant } from './types';
 import { showIncludesImage } from './types';
-import { listRssSensorEntities } from './utils/rss-entities';
 
 @customElement('hass-rss-card-editor')
 export class HassRssCardEditor extends LitElement {
@@ -18,28 +17,15 @@ export class HassRssCardEditor extends LitElement {
       border-top: 1px solid var(--divider-color);
       padding-top: 8px;
     }
+    .section:first-child {
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
     .section-title {
       font-size: 1.1em;
       font-weight: 500;
       margin-bottom: 8px;
-    }
-    .section-help {
-      margin: 0 0 12px;
-      font-size: 0.85em;
-      opacity: 0.8;
-      line-height: 1.4;
-    }
-    .feed-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      margin-bottom: 8px;
-    }
-    .feed-row ha-entity-picker {
-      flex: 1;
-    }
-    .add-btn {
-      margin-top: 4px;
     }
   `;
 
@@ -51,116 +37,10 @@ export class HassRssCardEditor extends LitElement {
     if (!this.hass || !this._config) return html``;
 
     return html`
-      ${this._renderSources()}
       ${this._renderDisplay()}
       ${this._renderAnimation()}
       ${this._renderFeatures()}
       ${this._renderLayout()}
-    `;
-  }
-
-  private _renderSources(): TemplateResult {
-    const feeds = this._config.feeds ?? [];
-    const rssEntities = this._getRssEntities();
-    const sourceOptions = listRssSensorEntities(this.hass);
-
-    return html`
-      <div class="section">
-        <div class="section-title">Sources</div>
-        <p class="section-help">
-          Limit which RSS sensors this card can use. Leave empty to allow every
-          HASS RSS sensor and switch between them from the card header.
-          To add a new RSS URL, go to Settings → Devices &amp; Services → HASS RSS.
-        </p>
-        ${feeds.length === 0
-          ? html`
-              <p class="section-help">
-                No sources pinned yet. The card will list all
-                ${sourceOptions.length} available RSS sensors.
-              </p>
-            `
-          : ''}
-        ${feeds.map(
-          (feed, index) => html`
-            <div class="feed-row">
-              <ha-entity-picker
-                .hass=${this.hass}
-                .label=${'RSS sensor'}
-                .value=${feed.entity}
-                .includeEntities=${rssEntities}
-                .allowCustomEntity=${false}
-                @value-changed=${(ev: CustomEvent) =>
-                  this._updateFeed(index, 'entity', ev.detail.value)}
-              ></ha-entity-picker>
-              <ha-textfield
-                label="Category filter"
-                .value=${feed.category ?? ''}
-                @input=${(ev: Event) =>
-                  this._updateFeed(
-                    index,
-                    'category',
-                    (ev.target as HTMLInputElement).value,
-                  )}
-              ></ha-textfield>
-              ${feeds.length > 1
-                ? html`
-                    <ha-icon-button
-                      .path=${'M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z'}
-                      @click=${() => this._removeFeed(index)}
-                    ></ha-icon-button>
-                  `
-                : ''}
-            </div>
-          `,
-        )}
-        <ha-button class="add-btn" @click=${this._addFeed}>Add another source</ha-button>
-        ${this._renderActiveSourcePicker(sourceOptions)}
-      </div>
-    `;
-  }
-
-  private _renderActiveSourcePicker(
-    sourceOptions: { entity: string; name: string }[],
-  ): TemplateResult | typeof import('lit').nothing {
-    if (sourceOptions.length <= 1) {
-      return html``;
-    }
-
-    const configured = (this._config.feeds ?? []).filter((feed) => feed.entity?.trim());
-    const options =
-      configured.length > 0
-        ? configured.map((feed) => {
-            const match = sourceOptions.find((option) => option.entity === feed.entity);
-            return (
-              match ?? {
-                entity: feed.entity,
-                name: feed.entity,
-              }
-            );
-          })
-        : sourceOptions;
-
-    return html`
-      <ha-form
-        .hass=${this.hass}
-        .data=${{ active_source: this._config.active_source ?? options[0]?.entity }}
-        .schema=${[
-          {
-            name: 'active_source',
-            selector: {
-              select: {
-                mode: 'dropdown',
-                options: options.map((option) => ({
-                  value: option.entity,
-                  label: option.name,
-                })),
-              },
-            },
-          },
-        ]}
-        @value-changed=${(ev: CustomEvent) =>
-          this._updateConfig('active_source', ev.detail.value.active_source)}
-      ></ha-form>
     `;
   }
 
@@ -445,40 +325,6 @@ export class HassRssCardEditor extends LitElement {
         ></ha-form>
       </div>
     `;
-  }
-
-  private _getRssEntities(): string[] {
-    return Object.keys(this.hass.states).filter((entityId) => {
-      const state = this.hass.states[entityId];
-      return (
-        entityId.startsWith('sensor.') &&
-        state.attributes?.feed_name !== undefined
-      );
-    });
-  }
-
-  private _addFeed(): void {
-    const feeds = [...(this._config.feeds ?? []), { entity: '' }];
-    this._config = { ...this._config, feeds };
-    this._dispatchConfig();
-  }
-
-  private _removeFeed(index: number): void {
-    const feeds = [...(this._config.feeds ?? [])];
-    feeds.splice(index, 1);
-    this._config = { ...this._config, feeds: feeds.length ? feeds : [] };
-    this._dispatchConfig();
-  }
-
-  private _updateFeed(
-    index: number,
-    key: 'entity' | 'category',
-    value: string,
-  ): void {
-    const feeds = [...(this._config.feeds ?? [])];
-    feeds[index] = { ...feeds[index], [key]: value };
-    this._config = { ...this._config, feeds };
-    this._dispatchConfig();
   }
 
   private _updateConfig(key: keyof HassRssCardConfig, value: unknown): void {
