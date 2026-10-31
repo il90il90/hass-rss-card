@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, wsl]
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +22,7 @@ jobs:
       - run: npm run build
 
       - uses: actions/upload-artifact@v4
+        if: runner.environment == 'github-hosted'
         with:
           name: hass-rss-card
           path: |
